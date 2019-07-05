@@ -854,6 +854,11 @@ public class LightAnalysisModeTestGenerated extends AbstractLightAnalysisModeTes
                 KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/box/assert/jvm"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
             }
 
+            @TestMetadata("initializerAssertionsEnabled.kt")
+            public void testInitializerAssertionsEnabled() throws Exception {
+                runTest("compiler/testData/codegen/box/assert/jvm/initializerAssertionsEnabled.kt");
+            }
+
             @TestMetadata("interfaceAssertionsDisabled.kt")
             public void testInterfaceAssertionsDisabled() throws Exception {
                 runTest("compiler/testData/codegen/box/assert/jvm/interfaceAssertionsDisabled.kt");
@@ -862,6 +867,11 @@ public class LightAnalysisModeTestGenerated extends AbstractLightAnalysisModeTes
             @TestMetadata("interfaceAssertionsEnabled.kt")
             public void testInterfaceAssertionsEnabled() throws Exception {
                 runTest("compiler/testData/codegen/box/assert/jvm/interfaceAssertionsEnabled.kt");
+            }
+
+            @TestMetadata("lambdaNotEvaluated.kt")
+            public void testLambdaNotEvaluated() throws Exception {
+                runTest("compiler/testData/codegen/box/assert/jvm/lambdaNotEvaluated.kt");
             }
 
             @TestMetadata("localAnonymousFunction.kt")
