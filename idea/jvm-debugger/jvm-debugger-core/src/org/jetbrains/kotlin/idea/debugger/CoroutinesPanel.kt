@@ -5,16 +5,17 @@
 
 package org.jetbrains.kotlin.idea.debugger
 
+import com.intellij.debugger.DebuggerManagerEx
 import com.intellij.debugger.actions.DebuggerAction
 import com.intellij.debugger.actions.DebuggerActions
 import com.intellij.debugger.actions.GotoFrameSourceAction
+import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.engine.events.DebuggerCommandImpl
 import com.intellij.debugger.impl.DebuggerContextImpl
 import com.intellij.debugger.impl.DebuggerContextListener
 import com.intellij.debugger.impl.DebuggerSession
 import com.intellij.debugger.impl.DebuggerStateManager
 import com.intellij.debugger.ui.impl.DebuggerTreePanel
-import com.intellij.debugger.ui.impl.ThreadsDebuggerTree
 import com.intellij.debugger.ui.impl.watch.DebuggerTree
 import com.intellij.debugger.ui.impl.watch.DebuggerTreeNodeImpl
 import com.intellij.ide.DataManager
@@ -33,7 +34,6 @@ import java.awt.BorderLayout
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
 import java.util.NoSuchElementException
-import javax.swing.JTree
 
 class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : DebuggerTreePanel(project, stateManager) {
     @NonNls
@@ -77,24 +77,22 @@ class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : De
                     if (isUpdateEnabled) {
                         val tree = getCoroutinesTree()
                         val root = tree.model.root as DebuggerTreeNodeImpl
-                        if (root != null) {
-                            val process = context.debugProcess
-                            if (process != null) {
-                                process.managerThread.invoke(object : DebuggerCommandImpl() {
-                                    override fun action() {
-                                        try {
-                                            updateNodeLabels(root)
-                                        } finally {
-                                            reschedule()
-                                        }
-                                    }
-
-                                    override fun commandCancelled() {
+                        val process = context.debugProcess
+                        if (process != null) {
+                            process.managerThread.invoke(object : DebuggerCommandImpl() {
+                                override fun action() {
+                                    try {
+                                        updateNodeLabels(root)
+                                    } finally {
                                         reschedule()
                                     }
-                                })
-                                updateScheduled = true
-                            }
+                                }
+
+                                override fun commandCancelled() {
+                                    reschedule()
+                                }
+                            })
+                            updateScheduled = true
                         }
                     }
                 } finally {
@@ -120,13 +118,15 @@ class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : De
         super.dispose()
     }
 
-    // ok
+    // TODO
     private fun updateNodeLabels(from: DebuggerTreeNodeImpl) {
         val children = from.children()
         try {
             while (children.hasMoreElements()) {
                 val child = children.nextElement() as DebuggerTreeNodeImpl
-                child.descriptor.updateRepresentation(null) { child.labelChanged() }
+                child.descriptor.updateRepresentation(
+                    null
+                ) { child.labelChanged() }
                 updateNodeLabels(child)
             }
         } catch (ignored: NoSuchElementException) { // children have changed - just skip
@@ -152,7 +152,7 @@ class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : De
         } else super.getData(dataId)
     }
 
-    // ok
+    // TODO
     fun getCoroutinesTree(): CoroutinesDebuggerTree = tree as CoroutinesDebuggerTree
 
 }

@@ -66,7 +66,7 @@ class CoroutineDumpPanel(project: Project, consoleView: ConsoleView, toolbarActi
             val index = coroutinesList.selectedIndex
             if (index >= 0) {
                 val selection = coroutinesList.model.getElementAt(index) as CoroutineState
-                AnalyzeStacktraceUtil.printStacktrace(consoleView, selection.stackTrace)
+                AnalyzeStacktraceUtil.printStacktrace(consoleView, selection.stringStackTrace)
             } else {
                 AnalyzeStacktraceUtil.printStacktrace(consoleView, "")
             }
@@ -84,7 +84,7 @@ class CoroutineDumpPanel(project: Project, consoleView: ConsoleView, toolbarActi
         toolbarActions.add(filterAction)
         toolbarActions.add(CopyToClipboardAction(dump, project))
 //        toolbarActions.add(SortThreadsAction())
-//        toolbarActions.add(ActionManager.getInstance().getAction(IdeActions.ACTION_EXPORT_TO_TEXT_FILE))
+        toolbarActions.add(ActionManager.getInstance().getAction(IdeActions.ACTION_EXPORT_TO_TEXT_FILE))
         toolbarActions.add(MergeStacktracesAction())
         add(ActionManager.getInstance().createActionToolbar("CoroutinesDump", toolbarActions, false).component, BorderLayout.WEST)
 
@@ -121,7 +121,7 @@ class CoroutineDumpPanel(project: Project, consoleView: ConsoleView, toolbarActi
         var index = 0
         val states = if (UISettings.instance.state.mergeEqualStackTraces) mergedDump else dump
         for (state in states) {
-            if (StringUtil.containsIgnoreCase(state.stackTrace, text) || StringUtil.containsIgnoreCase(state.name, text)) {
+            if (StringUtil.containsIgnoreCase(state.stringStackTrace, text) || StringUtil.containsIgnoreCase(state.name, text)) {
 
                 model.addElement(state)
                 if (selection === state) {
@@ -173,7 +173,7 @@ class CoroutineDumpPanel(project: Project, consoleView: ConsoleView, toolbarActi
 
     private fun getAttributes(state: CoroutineState): SimpleTextAttributes {
         return when {
-            state.isSleeping -> SimpleTextAttributes.GRAY_ATTRIBUTES
+            state.isSuspended -> SimpleTextAttributes.GRAY_ATTRIBUTES
             state.isEmptyStackTrace -> SimpleTextAttributes(SimpleTextAttributes.STYLE_PLAIN, Color.GRAY.brighter())
             else -> SimpleTextAttributes.REGULAR_ATTRIBUTES
 
@@ -242,7 +242,7 @@ class CoroutineDumpPanel(project: Project, consoleView: ConsoleView, toolbarActi
             val buf = StringBuilder()
             buf.append("Full coroutine dump").append("\n\n")
             for (state in myCoroutinesDump) {
-                buf.append(state.stackTrace).append("\n\n")
+                buf.append(state.stringStackTrace).append("\n\n")
             }
             CopyPasteManager.getInstance().setContents(StringSelection(buf.toString()))
 
@@ -264,7 +264,7 @@ class CoroutineDumpPanel(project: Project, consoleView: ConsoleView, toolbarActi
         override fun getReportText(): String {
             val sb = StringBuilder()
             for (state in states) {
-                sb.append(state.stackTrace).append("\n\n")
+                sb.append(state.stringStackTrace).append("\n\n")
             }
             return sb.toString()
         }
