@@ -62,17 +62,30 @@ class CoroutinesDebuggerTree(project: Project) : DebuggerTree(project) {
                 debugProcess?.managerThread?.schedule(object : BuildNodeCommand(debuggerTreeNode) {
                     override fun threadAction(suspendContext: SuspendContextImpl) {
                         val evalContext = debuggerContext.createEvaluationContext() ?: return
-                        (debuggerTreeNode.descriptor as CoroutineDescriptorImpl).state.stackTrace.forEach { frame ->
-                            if (frame.methodName != "\b")
+                        if (debuggerTreeNode.descriptor is CoroutineDescriptorImpl) {
+                            val proxy = ThreadReferenceProxyImpl(
+                                debugProcess.virtualMachineProxy,
+                                (debuggerTreeNode.descriptor as CoroutineDescriptorImpl).state.thread
+                            )
+                            val frames = proxy.forceFrames()
+                            frames.forEach { frame ->
                                 myChildren.add(
                                     myNodeManager.createNode(
-                                        myNodeManager.getDescriptor(debuggerTreeNode.descriptor, CoroutineStackFrameData(frame)),
+                                        myNodeManager.getDescriptor(
+                                            debuggerTreeNode.descriptor,
+                                            CoroutineStackFrameData(
+                                                frame,
+                                                (debuggerTreeNode.descriptor as CoroutineDescriptorImpl).state.stackTrace
+                                            )
+                                        ),
                                         evalContext
                                     )
                                 )
-                        }
-                        DebuggerInvocationUtil.swingInvokeLater(project) {
-                            updateUI(true)
+                            }
+
+                            DebuggerInvocationUtil.swingInvokeLater(project) {
+                                updateUI(true)
+                            }
                         }
                     }
                 })
@@ -241,28 +254,20 @@ class CoroutinesDebuggerTree(project: Project) : DebuggerTree(project) {
         @Throws(EvaluateException::class)
         override fun calcRepresentation(context: EvaluationContextImpl?, labelListener: DescriptorLabelListener): String {
             DebuggerManagerThreadImpl.assertIsManagerThread()
-            return state.name
+            return "${state.name}: ${state.state}"
         }
 
         override fun isExpandable(): Boolean {
-            return !state.isEmptyStackTrace
+            return state.state == "RUNNING" // TODO
         }
 
         override fun setContext(context: EvaluationContextImpl?) {
-//            val coroutineState = state
-//            val suspendManager = context?.debugProcess?.suspendManager
-//            val suspendContext = context?.suspendContext
 
-//            myIsExpandable = calcExpandable(state.isSuspended)
-//            this.suspendContext =
-//                if (suspendManager != null) SuspendManagerUtil.findContextByThread(suspendManager, coroutineState) else suspendContext
-//            isAtBreakpoint = coroutineState.isAtBreakpoint
-//            isCurrent = if (suspendContext != null) suspendContext.thread === coroutineState else false
-//            isFrozen = suspendManager?.isFrozen(coroutineState) ?: isSuspended
         }
     }
 
-    class CoroutineStackFrameData(val info: StackTraceElement) : DescriptorData<CoroutineStackFrameDescriptor>() {
+    class CoroutineStackFrameData(val frame: StackFrameProxyImpl, val trace: List<StackTraceElement>) :
+        DescriptorData<CoroutineStackFrameDescriptor>() {
         override fun hashCode(): Int {
 //            TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
             return 0
@@ -275,25 +280,18 @@ class CoroutinesDebuggerTree(project: Project) : DebuggerTree(project) {
 
         override fun createDescriptorImpl(project: Project): CoroutineStackFrameDescriptor {
 //            TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-            return CoroutineStackFrameDescriptor(info)
+            return CoroutineStackFrameDescriptor(frame, trace)
         }
 
         override fun getDisplayKey(): DisplayKey<CoroutineStackFrameDescriptor> {
 //            TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-            return SimpleDisplayKey(info)
+            return SimpleDisplayKey(frame)
         }
 
     }
 
-    class CoroutineStackFrameDescriptor(val info: StackTraceElement) : NodeDescriptorImpl() {
-        override fun calcRepresentation(context: EvaluationContextImpl?, labelListener: DescriptorLabelListener?): String {
-            return "${info.methodName}:${info.lineNumber}, ${info.className}" // TODO
-        }
-
-        override fun setContext(context: EvaluationContextImpl?) {
-//            TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-        }
-
+    class CoroutineStackFrameDescriptor(val frame: StackFrameProxyImpl, val trace: List<StackTraceElement>) :
+        StackFrameDescriptorImpl(frame, MethodsTracker()) {
         override fun isExpandable() = false
     }
 }

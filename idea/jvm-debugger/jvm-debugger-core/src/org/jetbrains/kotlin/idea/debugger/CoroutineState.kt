@@ -5,15 +5,16 @@
 
 package org.jetbrains.kotlin.idea.debugger
 
+import com.sun.jdi.ThreadReference
+
 /**
  * Represents immutable state of a coroutine.
  * It's not tied with debug implementation of kotlinx.coroutines.debug
  */
-open class CoroutineState(val name: String, val state: String) {
+open class CoroutineState(val name: String, var state: String, var thread: ThreadReference? = null) {
     var isSuspended: Boolean = state == "SUSPENDED"
     val isEmptyStackTrace: Boolean by lazy { stackTrace.isEmpty() }
     var coroutineStateDetail: String? = state
-    var extraState: String? = null
     lateinit var stackTrace: List<StackTraceElement>
 
     val stringStackTrace: String by lazy {

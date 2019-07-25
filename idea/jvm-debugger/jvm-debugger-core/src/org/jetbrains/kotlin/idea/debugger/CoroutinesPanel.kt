@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.idea.debugger
 
+import com.intellij.debugger.DebuggerManager
 import com.intellij.debugger.DebuggerManagerEx
 import com.intellij.debugger.actions.DebuggerAction
 import com.intellij.debugger.actions.DebuggerActions
@@ -18,6 +19,7 @@ import com.intellij.debugger.impl.DebuggerStateManager
 import com.intellij.debugger.ui.impl.DebuggerTreePanel
 import com.intellij.debugger.ui.impl.watch.DebuggerTree
 import com.intellij.debugger.ui.impl.watch.DebuggerTreeNodeImpl
+import com.intellij.debugger.ui.tree.DebuggerTreeNode
 import com.intellij.ide.DataManager
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionPopupMenu
@@ -26,14 +28,27 @@ import com.intellij.openapi.actionSystem.PlatformDataKeys
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.ui.DoubleClickListener
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.util.Alarm
+import com.intellij.util.containers.FixedHashMap
+import com.intellij.xdebugger.XDebuggerUtil
+import com.intellij.xdebugger.impl.XDebugSessionImpl
+import com.intellij.xdebugger.impl.frame.XVariablesViewBase
+import com.intellij.xdebugger.impl.ui.DebuggerUIUtil
+import com.intellij.xdebugger.impl.ui.tree.XDebuggerTreeState
 //import com.jetbrains.rd.util.catch
 import org.jetbrains.annotations.NonNls
+import org.jetbrains.kotlin.load.kotlin.VirtualFileFinderFactory
+import org.jetbrains.kotlin.name.ClassId
+import org.jetbrains.kotlin.name.FqName
 import java.awt.BorderLayout
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
+import java.awt.event.MouseEvent
 import java.util.NoSuchElementException
+import javax.swing.JTree
 
 class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : DebuggerTreePanel(project, stateManager) {
     @NonNls
@@ -42,7 +57,7 @@ class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : De
     private val LABELS_UPDATE_DELAY_MS = 200
 
     init {
-        val disposable = DebuggerAction.installEditAction(getCoroutinesTree(), DebuggerActions.EDIT_FRAME_SOURCE)
+        val disposable = installAction(getCoroutinesTree(), DebuggerActions.EDIT_FRAME_SOURCE)
         registerDisposable(disposable)
         getCoroutinesTree().addKeyListener(object : KeyAdapter() {
             override fun keyPressed(e: KeyEvent?) {
@@ -65,6 +80,34 @@ class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : De
             }
         })
         startLabelsUpdate()
+    }
+
+    @Suppress("SameParameterValue")
+    private fun installAction(tree: JTree, actionName: String): () -> Unit {
+        val listener = object : DoubleClickListener() {
+            override fun onDoubleClick(e: MouseEvent): Boolean {
+                val location = tree.getPathForLocation(e.x, e.y)?.lastPathComponent as? DebuggerTreeNodeImpl ?: return false
+                val dataContext = DataManager.getInstance().getDataContext(tree)
+//                GotoFrameSourceAction.doAction(dataContext) // TODO
+                val context = DebuggerManagerEx.getInstanceEx(project).context
+                val view = (context.debuggerSession!!.xDebugSession as XDebugSessionImpl).sessionTab!!.watchesView
+                val field = XVariablesViewBase::class.java.getDeclaredField("myTreeStates").apply { isAccessible = true }
+                @Suppress("UNCHECKED_CAST")
+                val states = field.get(view) as FixedHashMap<Any, XDebuggerTreeState> // TODO
+                // TODO use debugger search scope
+                val fileFinder = VirtualFileFinderFactory.getInstance(project).create(GlobalSearchScope.allScope(project))
+                val trace = (location.userObject as CoroutinesDebuggerTree.CoroutineStackFrameDescriptor).trace.random() // TODO
+                val classFile = fileFinder.findVirtualFileWithHeader(ClassId.topLevel(FqName(trace.className))) // TODO
+//                XDebuggerUtil.getInstance().createPosition()
+                return true
+            }
+        }
+        listener.installOn(tree)
+
+        val disposable = { listener.uninstall(tree) }
+        DebuggerUIUtil.registerActionOnComponent(actionName, tree, disposable)
+
+        return disposable
     }
 
     private fun startLabelsUpdate() {

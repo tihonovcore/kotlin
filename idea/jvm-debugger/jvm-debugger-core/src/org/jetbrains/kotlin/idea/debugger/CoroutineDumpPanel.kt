@@ -196,9 +196,6 @@ class CoroutineDumpPanel(project: Project, consoleView: ConsoleView, toolbarActi
             }
             append(detail, attrs)
             append(")", attrs)
-            if (state.extraState != null) {
-                append(" [" + state.extraState + "]", attrs)
-            }
         }
     }
 

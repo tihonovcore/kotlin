@@ -26,7 +26,7 @@ import com.intellij.xdebugger.XDebuggerManagerListener
 class CoroutinesDebugConfigurationExtension : RunConfigurationExtension() {
 
     override fun isApplicableFor(configuration: RunConfigurationBase<*>): Boolean {
-//        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+//        TODO check if project is kotlin
         return true
     }
 

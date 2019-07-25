@@ -72,6 +72,7 @@
                 class="org.jetbrains.kotlin.idea.debugger.CoroutineDumpAction"
             text="Get Coroutines Dump"
             icon="/org/jetbrains/kotlin/idea/icons/kotlin.png">
+<!--                <add-to-group group-id="XDebugger.ToolWindow.LeftToolbar" anchor="after"/>-->
             </action>
         </group>
 
@@ -82,7 +83,6 @@
 <!--        TODO That's a little crappy yet-->
         <group id="Kotlin.XDebugger.Watches.Tree.LeftToolbar">
             <reference ref="Kotlin.XDebugger.CoroutinesDump"/>
-            <reference ref="DumbShit"/>
             <add-to-group group-id="XDebugger.ToolWindow.LeftToolbar" relative-to-action="DumpThreads" anchor="after"/>
         </group>
     </actions>

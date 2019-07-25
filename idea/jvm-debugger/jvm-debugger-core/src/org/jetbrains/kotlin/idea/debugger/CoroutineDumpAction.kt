@@ -72,6 +72,7 @@ class CoroutineDumpAction : AnAction(), AnAction.TransparentUpdate {
             val enhanceStackTraceWithThreadDump = debugProbesImplType.methodsByName("enhanceStackTraceWithThreadDump").first()
             val dumpMethod = debugProbes.methodsByName("dumpCoroutinesInfo", "()Ljava/util/List;").first()
             val instance = debugProbes.getValue(debugProbes.fieldByName("INSTANCE")) as ObjectReference
+
             // CoroutineInfo
             val info = context.findClass("$path.CoroutineInfo") as ClassType
             val getState = info.methodsByName("getState").first()
@@ -84,6 +85,8 @@ class CoroutineDumpAction : AnAction(), AnAction.TransparentUpdate {
             val getName = coroutineName.methodsByName("getName").first()
             val nameCompanion = coroutineName.getValue(coroutineName.fieldByName("Key")) as ObjectReferenceImpl
             val toString = (context.findClass("java.lang.Object") as ClassType).methodsByName("toString").first()
+            val threadRef = info.fieldByName("lastObservedThread")
+
             // get dump
             val infoList = context.invokeMethod(instance, dumpMethod, emptyList()) as ObjectReferenceImpl
             // Methods to work with list
@@ -93,31 +96,28 @@ class CoroutineDumpAction : AnAction(), AnAction.TransparentUpdate {
             val size = (context.invokeMethod(infoList, getSize, emptyList()) as IntegerValue).value()
             val element = context.findClass("java.lang.StackTraceElement") as ClassType
 
-            val result = mutableListOf<CoroutineState>()
-            for (i in 0 until size) {
-                val index = context.vm.mirrorOf(i)
+            return List(size) {
+                val index = context.vm.mirrorOf(it)
                 val elem = context.invokeMethod(infoList, getElement, listOf(index)) as ObjectReferenceImpl
-                result.add(
-                    refToState(
-                        context, elem,
-                        getState, toString,
-                        getContext, getContextElement,
-                        nameCompanion, getName, idField
-                    ).apply {
-                        stackTrace = getStackTrace2(
-                            elem,
-                            lastObservedStackTrace,
-                            getSize,
-                            getElement,
-                            debugProbesImpl,
-                            enhanceStackTraceWithThreadDump,
-                            element,
-                            context
-                        )
-                    }
-                )
+                refToState(
+                    context, elem,
+                    getState, toString,
+                    getContext, getContextElement,
+                    nameCompanion, getName, idField,
+                    threadRef
+                ).apply {
+                    stackTrace = getStackTrace(
+                        elem,
+                        lastObservedStackTrace,
+                        getSize,
+                        getElement,
+                        debugProbesImpl,
+                        enhanceStackTraceWithThreadDump,
+                        element,
+                        context
+                    )
+                }
             }
-            return result
         }
 
         /**
@@ -132,12 +132,13 @@ class CoroutineDumpAction : AnAction(), AnAction.TransparentUpdate {
             getContextElement: Method, // CoroutineContext.get(Key)
             nameKey: ObjectReferenceImpl, // CoroutineName companion object
             getName: Method, // CoroutineName.getName()
-            idField: Field // CoroutineId.idField()
+            idField: Field, // CoroutineId.idField()
+            threadRef: Field
         ): CoroutineState {
             //  stringState = coroutineInfo.state.toString()
             val state = context.invokeMethod(info, getState, emptyList()) as ObjectReferenceImpl
             val stringState = (context.invokeMethod(state, toString, emptyList()) as StringReferenceImpl).value()
-
+            val thread = if (stringState == "RUNNING") info.getValue(threadRef) as? ThreadReference else null
             // next lines are equal to `coroutineInfo.context.get(CoroutineName).name`
             val coroutineContextInst = context.invokeMethod(info, getContext, emptyList()) as ObjectReferenceImpl
             val coroutineName = context.invokeMethod(
@@ -151,38 +152,13 @@ class CoroutineDumpAction : AnAction(), AnAction.TransparentUpdate {
                 getName, emptyList()
             ) as StringReferenceImpl).value() else "coroutine"
             val id = (info.getValue(idField) as LongValue).value()
-            return CoroutineState("$name#$id", stringState)
+            return CoroutineState("$name#$id", stringState, thread)
         }
 
         /**
-         * Returns string representation of stackFrame for the given coroutine's [ObjectReferenceImpl]
+         * Returns list of stackTraceElements for the given CoroutineInfo's [ObjectReferenceImpl]
          */
         private fun getStackTrace(
-            info: ObjectReferenceImpl,
-            lastObservedStackTrace: Method,
-            getSize: Method,
-            getElement: Method,
-            toString: Method,
-            context: ExecutionContext
-        ): String {
-            // info.lastObservedStackTrace.forEach { frame ->
-            //            append("\n\tat $frame")
-            //        }
-            val frameList = context.invokeMethod(info, lastObservedStackTrace, emptyList()) as ObjectReferenceImpl
-            val size = (context.invokeMethod(frameList, getSize, emptyList()) as IntegerValue).value()
-            return buildString {
-                for (i in 0 until size) {
-                    val frame = context.invokeMethod(
-                        frameList, getElement,
-                        listOf(context.vm.virtualMachine.mirrorOf(i))
-                    ) as ObjectReferenceImpl
-                    val frameString = (context.invokeMethod(frame, toString, emptyList()) as StringReference).value()
-                    if (!frameString.contains("kotlinx.coroutines.debug.internal.DebugProbes")) this.appendln("\tat $frameString")
-                }
-            }
-        }
-
-        private fun getStackTrace2(
             info: ObjectReferenceImpl,
             lastObservedStackTrace: Method,
             getSize: Method,
