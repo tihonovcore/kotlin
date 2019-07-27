@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.idea.caches.trackers
 
+import com.intellij.lang.ASTNode
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.ModificationTracker
@@ -27,6 +28,7 @@ import com.intellij.psi.impl.PsiTreeChangeEventImpl.PsiEventType.CHILD_MOVED
 import com.intellij.psi.impl.PsiTreeChangeEventImpl.PsiEventType.PROPERTY_CHANGED
 import com.intellij.psi.impl.PsiTreeChangePreprocessor
 import com.intellij.psi.util.PsiModificationTracker
+import com.intellij.psi.util.parents
 import org.jetbrains.kotlin.idea.KotlinLanguage
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.getTopmostParentOfType
@@ -104,6 +106,8 @@ class KotlinCodeBlockModificationListener(
                     }
 
                     incOutOfBlockModificationCount(ktFile)
+                } else {
+                    incInBlockModificationCount(changedElements)
                 }
             }
         })
@@ -155,6 +159,23 @@ class KotlinCodeBlockModificationListener(
         private fun incOutOfBlockModificationCount(file: KtFile) {
             val count = file.getUserData(FILE_OUT_OF_BLOCK_MODIFICATION_COUNT) ?: 0
             file.putUserData(FILE_OUT_OF_BLOCK_MODIFICATION_COUNT, count + 1)
+        }
+
+        private fun incInBlockModificationCount(elements: Array<ASTNode>) {
+            for (element in elements) {
+                for (parent in element.psi.parents()) {
+                    if (parent is KtNamedFunction) {
+                        incInBlockModificationCount(parent)
+                        break
+                    }
+                    if (parent is KtFile) break
+                }
+            }
+        }
+
+        private fun incInBlockModificationCount(namedFunction: KtNamedFunction) {
+            val count = namedFunction.getUserData(IN_BLOCK_MODIFICATION_COUNT) ?: 0
+            namedFunction.putUserData(IN_BLOCK_MODIFICATION_COUNT, count + 1)
         }
 
         fun getInsideCodeBlockModificationScope(element: PsiElement): KtElement? {
@@ -218,6 +239,10 @@ class KotlinCodeBlockModificationListener(
 
 private val FILE_OUT_OF_BLOCK_MODIFICATION_COUNT = Key<Long>("FILE_OUT_OF_BLOCK_MODIFICATION_COUNT")
 
+private val IN_BLOCK_MODIFICATION_COUNT = Key<Long>("IN_BLOCK_MODIFICATION_COUNT")
+
 val KtFile.outOfBlockModificationCount: Long
     get() = getUserData(FILE_OUT_OF_BLOCK_MODIFICATION_COUNT) ?: 0
 
+val KtNamedFunction.inBlockModificationCount: Long
+    get() = getUserData(IN_BLOCK_MODIFICATION_COUNT) ?: 0

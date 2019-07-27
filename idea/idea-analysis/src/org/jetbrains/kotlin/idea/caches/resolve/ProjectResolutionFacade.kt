@@ -21,7 +21,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
-import com.intellij.psi.util.PsiModificationTracker
 import com.intellij.util.containers.SLRUCache
 import org.jetbrains.kotlin.analyzer.*
 import org.jetbrains.kotlin.analyzer.common.CommonAnalysisParameters
@@ -37,6 +36,7 @@ import org.jetbrains.kotlin.descriptors.ModuleDescriptor
 import org.jetbrains.kotlin.idea.caches.project.*
 import org.jetbrains.kotlin.idea.caches.project.IdeaModuleInfo
 import org.jetbrains.kotlin.idea.caches.project.getNullableModuleInfo
+import org.jetbrains.kotlin.idea.caches.trackers.KotlinCodeBlockModificationListener
 import org.jetbrains.kotlin.idea.compiler.IDELanguageSettingsProvider
 import org.jetbrains.kotlin.idea.project.IdeaEnvironment
 import org.jetbrains.kotlin.idea.project.findAnalyzerServices
@@ -92,7 +92,8 @@ internal class ProjectResolutionFacade(
                 }
             }
 
-            val allDependencies = resolverForProjectDependencies + listOf(PsiModificationTracker.MODIFICATION_COUNT)
+            val allDependencies =
+                resolverForProjectDependencies + listOf(KotlinCodeBlockModificationListener.getInstance(project).kotlinOutOfCodeBlockTracker)
             CachedValueProvider.Result.create(results, allDependencies)
         }, false
     )
