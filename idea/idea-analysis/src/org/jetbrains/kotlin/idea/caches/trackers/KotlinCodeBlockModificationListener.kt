@@ -17,10 +17,7 @@ import com.intellij.pom.event.PomModelEvent
 import com.intellij.pom.event.PomModelListener
 import com.intellij.pom.tree.TreeAspect
 import com.intellij.pom.tree.events.TreeChangeEvent
-import com.intellij.psi.PsiDirectory
-import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiManager
-import com.intellij.psi.PsiTreeChangeEvent
+import com.intellij.psi.*
 import com.intellij.psi.impl.PsiManagerImpl
 import com.intellij.psi.impl.PsiModificationTrackerImpl
 import com.intellij.psi.impl.PsiTreeChangeEventImpl
@@ -31,6 +28,7 @@ import com.intellij.psi.util.PsiModificationTracker
 import com.intellij.psi.util.parents
 import org.jetbrains.kotlin.idea.KotlinLanguage
 import org.jetbrains.kotlin.psi.*
+import org.jetbrains.kotlin.psi.psiUtil.collectDescendantsOfType
 import org.jetbrains.kotlin.psi.psiUtil.getTopmostParentOfType
 import org.jetbrains.kotlin.psi.psiUtil.isAncestor
 
@@ -107,7 +105,10 @@ class KotlinCodeBlockModificationListener(
 
                     incOutOfBlockModificationCount(ktFile)
                 } else {
-                    incInBlockModificationCount(changedElements)
+                    // ignore formatting (whitespaces etc)
+                    if (!isFormattingChange(changeSet)) {
+                        incInBlockModificationCount(changedElements)
+                    }
                 }
             }
         })
@@ -157,6 +158,8 @@ class KotlinCodeBlockModificationListener(
         }
 
         private fun incOutOfBlockModificationCount(file: KtFile) {
+            file.collectDescendantsOfType<KtNamedFunction>().forEach { it.putUserData(IN_BLOCK_MODIFICATION_COUNT, 0) }
+
             val count = file.getUserData(FILE_OUT_OF_BLOCK_MODIFICATION_COUNT) ?: 0
             file.putUserData(FILE_OUT_OF_BLOCK_MODIFICATION_COUNT, count + 1)
         }
@@ -177,6 +180,11 @@ class KotlinCodeBlockModificationListener(
             val count = namedFunction.getUserData(IN_BLOCK_MODIFICATION_COUNT) ?: 0
             namedFunction.putUserData(IN_BLOCK_MODIFICATION_COUNT, count + 1)
         }
+
+        fun isFormattingChange(changeSet: TreeChangeEvent): Boolean =
+            changeSet.changedElements.all {
+                changeSet.getChangesByElement(it).affectedChildren.all { c -> (c is PsiWhiteSpace || c is PsiComment) }
+            }
 
         fun getInsideCodeBlockModificationScope(element: PsiElement): KtElement? {
             val lambda = element.getTopmostParentOfType<KtLambdaExpression>()

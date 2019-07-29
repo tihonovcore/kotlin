@@ -31,6 +31,7 @@ import org.jetbrains.kotlin.container.get
 import org.jetbrains.kotlin.context.GlobalContext
 import org.jetbrains.kotlin.context.withModule
 import org.jetbrains.kotlin.context.withProject
+import org.jetbrains.kotlin.descriptors.DeclarationDescriptorWithSource
 import org.jetbrains.kotlin.descriptors.ModuleDescriptor
 import org.jetbrains.kotlin.diagnostics.DiagnosticUtils
 import org.jetbrains.kotlin.frontend.di.createContainerForLazyBodyResolve
@@ -47,6 +48,7 @@ import org.jetbrains.kotlin.resolve.diagnostics.Diagnostics
 import org.jetbrains.kotlin.resolve.diagnostics.SimpleDiagnostics
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 import org.jetbrains.kotlin.resolve.lazy.ResolveSession
+import org.jetbrains.kotlin.resolve.source.getPsi
 import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.util.slicedMap.ReadOnlySlice
 import org.jetbrains.kotlin.util.slicedMap.WritableSlice
@@ -76,7 +78,7 @@ internal class PerFileAnalysisCache(val file: KtFile, componentProvider: Compone
                 descendantsOfCurrent.clear()
             }
 
-            if (isANamedFunction(current)) break
+            if (current is KtNamedFunction && current.inBlockModificationCount > 0) break
 
             descendantsOfCurrent.add(current)
         }
@@ -86,9 +88,7 @@ internal class PerFileAnalysisCache(val file: KtFile, componentProvider: Compone
         return result
     }
 
-    private fun isANamedFunction(element: PsiElement) = element is KtNamedFunction
-
-    private fun isAFileFunction(element: PsiElement) = element is KtFile
+    private fun isAFile(element: PsiElement) = element is KtFile
 
     fun getAnalysisResults(element: KtElement): AnalysisResult {
         assert(element.containingKtFile == file) { "Wrong file. Expected $file, but was ${element.containingKtFile}" }
@@ -103,29 +103,34 @@ internal class PerFileAnalysisCache(val file: KtFile, componentProvider: Compone
             val result = if (analyzableParent is KtNamedFunction) {
                 CachedValuesManager.getManager(file.project).createCachedValue(
                     {
-                        val calculatedAnalysisResult = analyze(analyzableParent)
+                        val calculatedAnalysisResult: AnalysisResult =
+                            if (analyzableParent.inBlockModificationCount != 0L) {
+                                val result = analyze(analyzableParent)
 
-                        for (parent in analyzableParent.parents()) {
-                            val parentCache = cache[parent]
-                            if (parentCache is SimpleCachedValue) {
-                                val parentAnalysis = parentCache.value
-                                val newBindingCtx = mergeContexts(calculatedAnalysisResult, parentAnalysis, analyzableParent)
+                                for (parent in analyzableParent.parents()) {
+                                    val parentCache = cache[parent]
+                                    if (parentCache is SimpleCachedValue) {
+                                        val parentAnalysis = parentCache.value
+                                        val newBindingCtx = mergeContexts(result, parentAnalysis, analyzableParent)
 
-                                val newParentAnalysis = if (parentAnalysis.isError())
-                                    AnalysisResult.internalError(newBindingCtx, parentAnalysis.error)
-                                else AnalysisResult.success(
-                                    newBindingCtx,
-                                    parentAnalysis.moduleDescriptor,
-                                    parentAnalysis.shouldGenerateCode
-                                )
-                                cache[parent] = SimpleCachedValue(newParentAnalysis)
-                                break
+                                        val newParentAnalysis = if (parentAnalysis.isError())
+                                            AnalysisResult.internalError(newBindingCtx, parentAnalysis.error)
+                                        else AnalysisResult.success(
+                                            newBindingCtx,
+                                            parentAnalysis.moduleDescriptor,
+                                            parentAnalysis.shouldGenerateCode
+                                        )
+                                        cache[parent] = SimpleCachedValue(newParentAnalysis)
+                                        break
+                                    }
+                                }
+                                result
+                            } else {
+                                val ktFile = analyzableParent.parentsOfType<KtFile>().first()
+                                cache[ktFile]?.value ?: analyze(analyzableParent)
                             }
-                        }
 
-                        val dependencies = ModificationTracker {
-                            analyzableParent.inBlockModificationCount
-                        }
+                        val dependencies = ModificationTracker { analyzableParent.inBlockModificationCount }
                         CachedValueProvider.Result.create(calculatedAnalysisResult, dependencies)
                     }, false
                 )
@@ -138,6 +143,18 @@ internal class PerFileAnalysisCache(val file: KtFile, componentProvider: Compone
         }
     }
 
+    private fun findAllChildren(element: KtElement): Set<PsiElement> {
+        val set = mutableSetOf<PsiElement>()
+        val visitor = object : KtTreeVisitor<Unit>() {
+            override fun visitKtElement(ktElement: KtElement, data: Unit): Void? {
+                set.add(ktElement)
+                return super.visitKtElement(ktElement, Unit)
+            }
+        }
+        element.acceptChildren(visitor, Unit)
+        return set.toSet()
+    }
+
     private fun mergeContexts(
         analysisResult: AnalysisResult,
         parentAnalysis: AnalysisResult,
@@ -148,26 +165,27 @@ internal class PerFileAnalysisCache(val file: KtFile, componentProvider: Compone
 
         // parentCtx diagnostics can have potentially outdated psi elements
         // so far - traverse from children to parent (expensive) to identify that it is out of this element diagnostic
-        val diagnostics = parentCtx.diagnostics.all().filter {
+        val parentDiagnosticsAll = parentCtx.diagnostics.all()
+        val thisDiagnosticsAll = thisCtx.diagnostics.all()
+
+        val diagnostics = parentDiagnosticsAll.filter { d ->
             // do not copy diagnostic that is built on a top level as it could be outdated
-            for (diagnosticParent in it.psiElement.parentsWithSelf) {
+            for (diagnosticParent in generateSequence(d.psiElement) { it.parent }) {
                 if (diagnosticParent == element) {
-                    return@filter false
+                    break
                 }
-                if (isAFileFunction(diagnosticParent)) break
+                if (isAFile(diagnosticParent)) return@filter true
             }
-            true
-        }.toList() + thisCtx.diagnostics.all() // copy all diagnostics those belongs to `element`
+            return@filter false
+        }.toList() + thisDiagnosticsAll // copy all diagnostics those belongs to `element`
 
         // how long it could be a list of delegates ?
-        val delegates: List<BindingContext> = when (parentCtx) {
-            is StackedCompositeBindingContext -> {
-                listOf(thisCtx) + (if (parentCtx.element == element) parentCtx.delegates.drop(1) else parentCtx.delegates)
-            }
-            else -> listOf(thisCtx, parentCtx)
+        val ctx = when (parentCtx) {
+            is StackedCompositeBindingContext -> if (parentCtx.element == element) parentCtx.parentContext else parentCtx
+            else -> parentCtx
         }
 
-        return StackedCompositeBindingContext(element, delegates, SimpleDiagnostics(diagnostics.toList()))
+        return StackedCompositeBindingContext(element, findAllChildren(element), thisCtx, ctx, SimpleDiagnostics(diagnostics))
     }
 
     private fun analyze(analyzableElement: KtElement): AnalysisResult {
@@ -211,16 +229,37 @@ private class SimpleCachedValue<T>(private val value: T) : CachedValue<T> {
 
 private class StackedCompositeBindingContext(
     val element: KtElement,
-    val delegates: List<BindingContext>,
+    val children: Set<PsiElement>,
+    val elementContext: BindingContext,
+    val parentContext: BindingContext,
     private val diagnostics: Diagnostics
 ) : BindingContext {
 
+    val delegates = listOf(elementContext, parentContext)
+
+    private fun ctx(ktElement: PsiElement?): BindingContext? =
+        when {
+            ktElement != null -> if (children.contains(ktElement)) elementContext else parentContext
+            else -> null
+        }
+
     override fun getType(expression: KtExpression): KotlinType? {
-        return delegates.asSequence().map { it.getType(expression) }.firstOrNull { it != null }
+        return ctx(expression)!!.getType(expression)
     }
 
     override fun <K, V> get(slice: ReadOnlySlice<K, V>?, key: K?): V? {
-        return delegates.asSequence().map { it[slice, key] }.firstOrNull { it != null }
+        val element: PsiElement? = when (key) {
+            is PsiElement -> key
+            is Call -> key.callElement
+            is DeclarationDescriptorWithSource -> key.source.getPsi()
+            else -> null
+        }
+
+        if (element != null) {
+            return ctx(element)!![slice, key]
+        }
+        val value = delegates.asSequence().map { it[slice, key] }.firstOrNull { it != null }
+        return value
     }
 
     override fun <K, V> getKeys(slice: WritableSlice<K, V>?): Collection<K> {
@@ -238,9 +277,7 @@ private class StackedCompositeBindingContext(
         return diagnostics
     }
 
-    override fun addOwnDataTo(trace: BindingTrace, commitDiagnostics: Boolean) {
-        // Do nothing
-    }
+    override fun addOwnDataTo(trace: BindingTrace, commitDiagnostics: Boolean) = throw UnsupportedOperationException()
 }
 
 private object KotlinResolveDataProvider {
