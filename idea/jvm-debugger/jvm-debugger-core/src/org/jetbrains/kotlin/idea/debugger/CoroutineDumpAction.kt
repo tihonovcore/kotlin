@@ -62,6 +62,7 @@ class CoroutineDumpAction : AnAction(), AnAction.TransparentUpdate {
     companion object {
         /**
          * Invokes DebugProbes from debugged process's classpath and returns states of coroutines
+         * Should be invoked on debugger manager thread
          */
         fun buildCoroutineStates(context: ExecutionContext): List<CoroutineState> {
             val path = "kotlinx.coroutines.debug"
@@ -86,6 +87,7 @@ class CoroutineDumpAction : AnAction(), AnAction.TransparentUpdate {
             val nameCompanion = coroutineName.getValue(coroutineName.fieldByName("Key")) as ObjectReferenceImpl
             val toString = (context.findClass("java.lang.Object") as ClassType).methodsByName("toString").first()
             val threadRef = info.fieldByName("lastObservedThread")
+            val continuation = info.fieldByName("lastObservedFrame")
 
             // get dump
             val infoList = context.invokeMethod(instance, dumpMethod, emptyList()) as ObjectReferenceImpl
@@ -116,6 +118,7 @@ class CoroutineDumpAction : AnAction(), AnAction.TransparentUpdate {
                         element,
                         context
                     )
+                    frame = elem.getValue(continuation) as ObjectReference?
                 }
             }
         }

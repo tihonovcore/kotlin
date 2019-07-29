@@ -3,13 +3,17 @@
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
+@file:Suppress("DEPRECATION")
+
 package org.jetbrains.kotlin.idea.debugger
 
-import com.intellij.debugger.DebuggerManager
+//import com.jetbrains.rd.util.catch
+import com.intellij.debugger.DebuggerContext
 import com.intellij.debugger.DebuggerManagerEx
-import com.intellij.debugger.actions.DebuggerAction
 import com.intellij.debugger.actions.DebuggerActions
 import com.intellij.debugger.actions.GotoFrameSourceAction
+import com.intellij.debugger.engine.JavaValue
+import com.intellij.debugger.engine.evaluation.EvaluateException
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.engine.events.DebuggerCommandImpl
 import com.intellij.debugger.impl.DebuggerContextImpl
@@ -19,7 +23,8 @@ import com.intellij.debugger.impl.DebuggerStateManager
 import com.intellij.debugger.ui.impl.DebuggerTreePanel
 import com.intellij.debugger.ui.impl.watch.DebuggerTree
 import com.intellij.debugger.ui.impl.watch.DebuggerTreeNodeImpl
-import com.intellij.debugger.ui.tree.DebuggerTreeNode
+import com.intellij.debugger.ui.impl.watch.ValueDescriptorImpl
+import com.intellij.debugger.ui.tree.StackFrameDescriptor
 import com.intellij.ide.DataManager
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionPopupMenu
@@ -32,14 +37,23 @@ import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.ui.DoubleClickListener
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.util.Alarm
-import com.intellij.util.containers.FixedHashMap
 import com.intellij.xdebugger.XDebuggerUtil
+import com.intellij.xdebugger.XSourcePosition
+import com.intellij.xdebugger.frame.XNamedValue
+import com.intellij.xdebugger.frame.XValueChildrenList
+import com.intellij.xdebugger.frame.XValueContainer
 import com.intellij.xdebugger.impl.XDebugSessionImpl
-import com.intellij.xdebugger.impl.frame.XVariablesViewBase
+import com.intellij.xdebugger.impl.frame.XWatchesViewImpl
 import com.intellij.xdebugger.impl.ui.DebuggerUIUtil
-import com.intellij.xdebugger.impl.ui.tree.XDebuggerTreeState
-//import com.jetbrains.rd.util.catch
+import com.intellij.xdebugger.impl.ui.tree.nodes.XDebuggerTreeNode
+import com.intellij.xdebugger.impl.ui.tree.nodes.XValueContainerNode
+import com.intellij.xdebugger.impl.ui.tree.nodes.XValueNodeImpl
+import com.sun.jdi.ArrayReference
+import com.sun.jdi.ClassType
+import com.sun.jdi.ObjectReference
+import com.sun.jdi.StringReference
 import org.jetbrains.annotations.NonNls
+import org.jetbrains.kotlin.idea.debugger.evaluate.ExecutionContext
 import org.jetbrains.kotlin.load.kotlin.VirtualFileFinderFactory
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
@@ -47,7 +61,7 @@ import java.awt.BorderLayout
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
 import java.awt.event.MouseEvent
-import java.util.NoSuchElementException
+import java.util.*
 import javax.swing.JTree
 
 class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : DebuggerTreePanel(project, stateManager) {
@@ -84,22 +98,32 @@ class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : De
 
     @Suppress("SameParameterValue")
     private fun installAction(tree: JTree, actionName: String): () -> Unit {
+        val finderFactory = VirtualFileFinderFactory.getInstance(project)
         val listener = object : DoubleClickListener() {
             override fun onDoubleClick(e: MouseEvent): Boolean {
                 val location = tree.getPathForLocation(e.x, e.y)?.lastPathComponent as? DebuggerTreeNodeImpl ?: return false
                 val dataContext = DataManager.getInstance().getDataContext(tree)
-//                GotoFrameSourceAction.doAction(dataContext) // TODO
                 val context = DebuggerManagerEx.getInstanceEx(project).context
-                val view = (context.debuggerSession!!.xDebugSession as XDebugSessionImpl).sessionTab!!.watchesView
-                val field = XVariablesViewBase::class.java.getDeclaredField("myTreeStates").apply { isAccessible = true }
-                @Suppress("UNCHECKED_CAST")
-                val states = field.get(view) as FixedHashMap<Any, XDebuggerTreeState> // TODO
+                val view = (context.debuggerSession!!.xDebugSession as XDebugSessionImpl).sessionTab!!.watchesView as XWatchesViewImpl
                 // TODO use debugger search scope
-                val fileFinder = VirtualFileFinderFactory.getInstance(project).create(GlobalSearchScope.allScope(project))
-                val trace = (location.userObject as CoroutinesDebuggerTree.CoroutineStackFrameDescriptor).trace.random() // TODO
-                val classFile = fileFinder.findVirtualFileWithHeader(ClassId.topLevel(FqName(trace.className))) // TODO
-//                XDebuggerUtil.getInstance().createPosition()
-                return true
+                val fileFinder = finderFactory.create(GlobalSearchScope.allScope(project))
+                when (val descriptor = location.userObject) {
+                    is CoroutinesDebuggerTree.SuspendStackFrameDescriptor -> {
+                        val trace = descriptor.frame
+                        val classFile = fileFinder.findVirtualFileWithHeader(ClassId.topLevel(FqName(trace.className)))
+                        // TODO null if inner class is given
+                        val pos = XDebuggerUtil.getInstance().createPosition(classFile, trace.lineNumber) ?: return false
+                        view.buildTreeAndRestoreState(pos, context, descriptor)
+                        return true
+
+                    }
+                    is StackFrameDescriptor -> {
+                        GotoFrameSourceAction.doAction(dataContext)
+                        return true
+                    }
+                    else -> return true // TODO
+                }
+
             }
         }
         listener.installOn(tree)
@@ -109,6 +133,76 @@ class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : De
 
         return disposable
     }
+
+    fun XWatchesViewImpl.buildTreeAndRestoreState(
+        pos: XSourcePosition,
+        context: DebuggerContextImpl,
+        descriptor: CoroutinesDebuggerTree.SuspendStackFrameDescriptor
+    ) {
+        tree.sourcePosition = pos
+        createNewRootNode(context, descriptor)
+    }
+
+    private fun XWatchesViewImpl.createNewRootNode(
+        context: DebuggerContextImpl,
+        descriptor: CoroutinesDebuggerTree.SuspendStackFrameDescriptor
+    ): XDebuggerTreeNode {
+        return (object : XValueContainerNode<XValueContainer>(tree,
+                                                              null,
+                                                              false,
+                                                              object : XValueContainer() {}) {})
+            .apply {
+                this@createNewRootNode.tree.setRoot(this, false)
+                val evalContext = context.createEvaluationContext()
+                val execContext = ExecutionContext(evalContext ?: return@apply, evalContext.frameProxy ?: return@apply)
+                val debugMetadataKtType = execContext.findClass("kotlin.coroutines.jvm.internal.DebugMetadataKt") as ClassType
+                val vars = getSpilledVariables(descriptor.state.frame ?: return@apply, debugMetadataKtType, execContext)
+                val children = XValueChildrenList()
+                vars?.forEach {
+                    children.add(it)
+                }
+                this.addChildren(children, true)
+            }
+    }
+
+    fun getSpilledVariables(continuation: ObjectReference, debugMetadataKtType: ClassType, context: ExecutionContext): List<XNamedValue>? {
+        val getSpilledVariableFieldMappingMethod = debugMetadataKtType.methodsByName(
+            "getSpilledVariableFieldMapping",
+            "(Lkotlin/coroutines/jvm/internal/BaseContinuationImpl;)[Ljava/lang/String;"
+        ).firstOrNull() ?: return null
+
+        val args = listOf(continuation)
+
+        val rawSpilledVariables = context.invokeMethod(debugMetadataKtType, getSpilledVariableFieldMappingMethod, args) as? ArrayReference
+            ?: return null
+
+        val length = rawSpilledVariables.length() / 2
+        val spilledVariables = ArrayList<XNamedValue>(length)
+
+        for (index in 0 until length) {
+            val fieldName = (rawSpilledVariables.getValue(2 * index) as? StringReference)?.value() ?: continue
+            val variableName = (rawSpilledVariables.getValue(2 * index + 1) as? StringReference)?.value() ?: continue
+            val field = continuation.referenceType().fieldByName(fieldName) ?: continue
+
+            val valueDescriptor = object : ValueDescriptorImpl(context.project) {
+                override fun calcValueName() = variableName
+                override fun calcValue(evaluationContext: EvaluationContextImpl?) = continuation.getValue(field)
+                override fun getDescriptorEvaluation(context: DebuggerContext?) =
+                    throw EvaluateException("Spilled variable evaluation is not supported")
+            }
+
+            spilledVariables += JavaValue.create(
+                null,
+                valueDescriptor,
+                context.evaluationContext,
+                context.debugProcess.xdebugProcess!!.nodeManager,
+                false
+            )
+        }
+
+        return spilledVariables
+    }
+
 
     private fun startLabelsUpdate() {
         if (myUpdateLabelsAlarm.isDisposed) return

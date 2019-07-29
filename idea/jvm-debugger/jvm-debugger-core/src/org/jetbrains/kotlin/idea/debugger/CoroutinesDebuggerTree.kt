@@ -1,9 +1,12 @@
 package org.jetbrains.kotlin.idea.debugger
 
 import com.intellij.debugger.DebuggerBundle
+import com.intellij.debugger.DebuggerContext
 import com.intellij.debugger.DebuggerInvocationUtil
 import com.intellij.debugger.DebuggerManagerEx
+import com.intellij.debugger.engine.DebugProcessImpl
 import com.intellij.debugger.engine.DebuggerManagerThreadImpl
+import com.intellij.debugger.engine.JavaValue
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.evaluation.EvaluateException
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
@@ -15,9 +18,7 @@ import com.intellij.debugger.impl.descriptors.data.DisplayKey
 import com.intellij.debugger.impl.descriptors.data.SimpleDisplayKey
 import com.intellij.debugger.impl.descriptors.data.StackFrameData
 import com.intellij.debugger.jdi.StackFrameProxyImpl
-import com.intellij.debugger.jdi.ThreadGroupReferenceProxyImpl
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
-import com.intellij.debugger.settings.ThreadsViewSettings
 import com.intellij.debugger.ui.impl.tree.TreeBuilder
 import com.intellij.debugger.ui.impl.tree.TreeBuilderNode
 import com.intellij.debugger.ui.impl.watch.*
@@ -28,13 +29,15 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.ui.SpeedSearchComparator
 import com.intellij.ui.TreeSpeedSearch
-import com.intellij.util.ui.tree.TreeModelAdapter
+import com.intellij.xdebugger.frame.XNamedValue
+import com.sun.jdi.ArrayReference
+import com.sun.jdi.ClassType
+import com.sun.jdi.StringReference
 import org.jetbrains.kotlin.idea.debugger.evaluate.ExecutionContext
+import com.sun.jdi.ObjectReference
 import javax.swing.Icon
-import javax.swing.SwingUtilities
 import javax.swing.event.TreeModelEvent
 import javax.swing.event.TreeModelListener
-import javax.swing.tree.TreePath
 
 class CoroutinesDebuggerTree(project: Project) : DebuggerTree(project) {
     private val logger = Logger.getInstance("#com.intellij.debugger.ui.impl.CoroutinesDebuggerTree")
@@ -63,26 +66,7 @@ class CoroutinesDebuggerTree(project: Project) : DebuggerTree(project) {
                     override fun threadAction(suspendContext: SuspendContextImpl) {
                         val evalContext = debuggerContext.createEvaluationContext() ?: return
                         if (debuggerTreeNode.descriptor is CoroutineDescriptorImpl) {
-                            val proxy = ThreadReferenceProxyImpl(
-                                debugProcess.virtualMachineProxy,
-                                (debuggerTreeNode.descriptor as CoroutineDescriptorImpl).state.thread
-                            )
-                            val frames = proxy.forceFrames()
-                            frames.forEach { frame ->
-                                myChildren.add(
-                                    myNodeManager.createNode(
-                                        myNodeManager.getDescriptor(
-                                            debuggerTreeNode.descriptor,
-                                            CoroutineStackFrameData(
-                                                frame,
-                                                (debuggerTreeNode.descriptor as CoroutineDescriptorImpl).state.stackTrace
-                                            )
-                                        ),
-                                        evalContext
-                                    )
-                                )
-                            }
-
+                            addChildren(myChildren, debugProcess, debuggerTreeNode.descriptor, evalContext)
                             DebuggerInvocationUtil.swingInvokeLater(project) {
                                 updateUI(true)
                             }
@@ -96,29 +80,84 @@ class CoroutinesDebuggerTree(project: Project) : DebuggerTree(project) {
             }
         }
         model.setRoot(nodeFactory.defaultNode)
-        model.addTreeModelListener(
-            object : TreeModelListener {
-                override fun treeNodesChanged(event: TreeModelEvent) {
-                    hideTooltip()
-                }
-
-                override fun treeNodesInserted(event: TreeModelEvent) {
-                    hideTooltip()
-                }
-
-                override fun treeNodesRemoved(event: TreeModelEvent) {
-                    hideTooltip()
-                }
-
-                override fun treeStructureChanged(event: TreeModelEvent) {
-                    hideTooltip()
-                }
-            })
+        model.addTreeModelListener(createListener())
 
         setModel(model)
 
         val search = TreeSpeedSearch(this)
         search.comparator = SpeedSearchComparator(false)
+    }
+
+    private fun addChildren(
+        children: MutableList<DebuggerTreeNodeImpl>,
+        debugProcess: DebugProcessImpl,
+        descriptor: NodeDescriptorImpl,
+        evalContext: EvaluationContextImpl
+    ) {
+        when ((descriptor as CoroutineDescriptorImpl).state.state) {
+            "RUNNING" -> {
+                val proxy = ThreadReferenceProxyImpl(
+                    debugProcess.virtualMachineProxy,
+                    descriptor.state.thread
+                )
+                val frames = proxy.forceFrames()
+                frames.forEach { frame ->
+                    children.add(createFrameDescriptor(descriptor, evalContext, frame))
+                }
+            }
+            "SUSPENDED" -> {
+                descriptor.state.stackTrace.forEach {
+                    children.add(createCoroutineFrameDescriptor(descriptor, evalContext, it))
+                }
+                // TODO add vars to other place, here should be stacktrace
+            }
+        }
+    }
+
+
+    private fun createFrameDescriptor(
+        descriptor: NodeDescriptorImpl,
+        evalContext: EvaluationContextImpl,
+        frame: StackFrameProxyImpl
+    ): DebuggerTreeNodeImpl {
+        return myNodeManager.createNode(
+            myNodeManager.getStackFrameDescriptor(
+                descriptor,
+                frame
+            ),
+            evalContext
+        )
+    }
+
+    private fun createCoroutineFrameDescriptor(
+        descriptor: CoroutineDescriptorImpl,
+        evalContext: EvaluationContextImpl,
+        frame: StackTraceElement
+    ): DebuggerTreeNodeImpl {
+        return myNodeManager.createNode(
+            myNodeManager.getDescriptor(
+                descriptor,
+                CoroutineStackFrameData(descriptor.state, frame)
+            ), evalContext
+        )
+    }
+
+    private fun createListener() = object : TreeModelListener {
+        override fun treeNodesChanged(event: TreeModelEvent) {
+            hideTooltip()
+        }
+
+        override fun treeNodesInserted(event: TreeModelEvent) {
+            hideTooltip()
+        }
+
+        override fun treeNodesRemoved(event: TreeModelEvent) {
+            hideTooltip()
+        }
+
+        override fun treeStructureChanged(event: TreeModelEvent) {
+            hideTooltip()
+        }
     }
 
     override fun isExpandable(node: DebuggerTreeNodeImpl): Boolean {
@@ -151,68 +190,15 @@ class CoroutinesDebuggerTree(project: Project) : DebuggerTree(project) {
             val context = mySession.contextManager.context
             val evaluationContext = debuggerContext.createEvaluationContext() ?: return
             val executionContext = ExecutionContext(evaluationContext, context.frameProxy ?: return)
-
             for (state in CoroutineDumpAction.buildCoroutineStates(executionContext)) {
                 root.add(nodeFactory.createNode(nodeFactory.getDescriptor(null, CoroutineData(state)), evaluationContext))
             }
-
             DebuggerInvocationUtil.swingInvokeLater(project) {
                 mutableModel.setRoot(root)
                 treeChanged()
             }
         }
 
-        private fun selectCoroutine(
-            pathToThread: MutableList<ThreadGroupReferenceProxyImpl>,
-            thread: ThreadReferenceProxyImpl?,
-            expand: Boolean
-        ) {
-            logger.assertTrue(SwingUtilities.isEventDispatchThread())
-            class MyTreeModelAdapter : TreeModelAdapter() {
-                fun structureChanged(node: DebuggerTreeNodeImpl) {
-                    val enumeration = node.children()
-                    while (enumeration.hasMoreElements()) {
-                        val child = enumeration.nextElement() as DebuggerTreeNodeImpl
-                        nodeChanged(child)
-                    }
-                }
-
-                private fun nodeChanged(debuggerTreeNode: DebuggerTreeNodeImpl) {
-                    if (pathToThread.size == 0) {
-                        if (debuggerTreeNode.descriptor is ThreadDescriptorImpl && (debuggerTreeNode.descriptor as ThreadDescriptorImpl).threadReference === thread) {
-                            removeListener()
-                            val treePath = TreePath(debuggerTreeNode.path)
-                            selectionPath = treePath
-                            if (expand && !isExpanded(treePath)) {
-                                expandPath(treePath)
-                            }
-                        }
-                    } else {
-                        if (debuggerTreeNode.descriptor is ThreadGroupDescriptorImpl && (debuggerTreeNode.descriptor as ThreadGroupDescriptorImpl).threadGroupReference === pathToThread[0]) {
-                            pathToThread.removeAt(0)
-                            expandPath(TreePath(debuggerTreeNode.path))
-                        }
-                    }
-                }
-
-                private fun removeListener() {
-                    val listener = this
-                    SwingUtilities.invokeLater { model.removeTreeModelListener(listener) }
-                }
-
-                override fun treeStructureChanged(event: TreeModelEvent) {
-                    if (event.path.size <= 1) {
-                        removeListener()
-                        return
-                    }
-                    structureChanged(event.treePath.lastPathComponent as DebuggerTreeNodeImpl)
-                }
-            }
-
-            val listener = MyTreeModelAdapter()
-            listener.structureChanged(model.root as DebuggerTreeNodeImpl)
-            model.addTreeModelListener(listener)
-        }
     }
 
     class CoroutineData(private val state: CoroutineState) : DescriptorData<CoroutineDescriptorImpl>() {
@@ -258,7 +244,7 @@ class CoroutinesDebuggerTree(project: Project) : DebuggerTree(project) {
         }
 
         override fun isExpandable(): Boolean {
-            return state.state == "RUNNING" // TODO
+            return state.state != "CREATED" // TODO
         }
 
         override fun setContext(context: EvaluationContextImpl?) {
@@ -266,32 +252,49 @@ class CoroutinesDebuggerTree(project: Project) : DebuggerTree(project) {
         }
     }
 
-    class CoroutineStackFrameData(val frame: StackFrameProxyImpl, val trace: List<StackTraceElement>) :
-        DescriptorData<CoroutineStackFrameDescriptor>() {
-        override fun hashCode(): Int {
-//            TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-            return 0
-        }
+    class CoroutineStackFrameData(val state: CoroutineState, val frame: StackTraceElement) :
+        DescriptorData<NodeDescriptorImpl>() {
+
+        override fun hashCode() = frame.hashCode()
 
         override fun equals(other: Any?): Boolean {
-//            TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-            return true
+            return if (other is CoroutineStackFrameData) {
+                other.frame == frame
+            } else false
         }
 
-        override fun createDescriptorImpl(project: Project): CoroutineStackFrameDescriptor {
-//            TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-            return CoroutineStackFrameDescriptor(frame, trace)
+        override fun createDescriptorImpl(project: Project): NodeDescriptorImpl {
+            return SuspendStackFrameDescriptor(state, frame) // TODO
         }
 
-        override fun getDisplayKey(): DisplayKey<CoroutineStackFrameDescriptor> {
-//            TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-            return SimpleDisplayKey(frame)
-        }
-
+        override fun getDisplayKey(): DisplayKey<NodeDescriptorImpl> = SimpleDisplayKey(frame)
     }
 
-    class CoroutineStackFrameDescriptor(val frame: StackFrameProxyImpl, val trace: List<StackTraceElement>) :
-        StackFrameDescriptorImpl(frame, MethodsTracker()) {
+    class SuspendStackFrameDescriptor(val state: CoroutineState, val frame: StackTraceElement) :
+        NodeDescriptorImpl() {
+        override fun calcRepresentation(context: EvaluationContextImpl?, labelListener: DescriptorLabelListener?): String {
+            return "${frame.methodName}:${frame.lineNumber}, ${frame.className}" // TODO package
+        }
+
+        override fun setContext(context: EvaluationContextImpl?) {
+//            TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        }
+
         override fun isExpandable() = false
     }
+
+    /**
+     * For the case when no data inside frame is available
+     */
+    class EmptyStackFrameDescriptor(val frame: StackTraceElement) : NodeDescriptorImpl() {
+        override fun calcRepresentation(context: EvaluationContextImpl?, labelListener: DescriptorLabelListener?): String {
+            return "${frame.methodName}:${frame.lineNumber}, ${frame.className}" // TODO package
+        }
+
+        override fun setContext(context: EvaluationContextImpl?) {
+        }
+
+        override fun isExpandable() = false
+    }
+
 }
