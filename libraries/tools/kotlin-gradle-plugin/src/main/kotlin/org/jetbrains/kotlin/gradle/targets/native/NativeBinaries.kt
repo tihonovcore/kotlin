@@ -29,19 +29,8 @@ sealed class NativeBinary(
     private val name: String,
     open var baseName: String,
     val buildType: NativeBuildType,
-    compilation: KotlinNativeCompilation
+    var compilation: KotlinNativeCompilation
 ) : Named {
-
-    var compilation: KotlinNativeCompilation = compilation
-        set(value) {
-            val oldLinkTaskData = compilation.taskDataForTask(linkTaskName)
-            (compilation.taskDataByTaskName as MutableMap).remove(linkTaskName)
-            value.registerKotlinCompileTask(linkTaskName)
-            field = value
-
-            // Move the state from the old link task data:
-            value.taskDataForTask(linkTaskName).destinationDirProvider = oldLinkTaskData.destinationDirProvider
-        }
 
     val target: KotlinNativeTarget
         get() = compilation.target
