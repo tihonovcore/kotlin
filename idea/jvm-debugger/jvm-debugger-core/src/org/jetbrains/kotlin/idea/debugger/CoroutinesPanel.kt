@@ -7,7 +7,6 @@
 
 package org.jetbrains.kotlin.idea.debugger
 
-//import com.jetbrains.rd.util.catch
 import com.intellij.debugger.DebuggerContext
 import com.intellij.debugger.DebuggerManagerEx
 import com.intellij.debugger.actions.DebuggerActions
@@ -33,6 +32,7 @@ import com.intellij.openapi.actionSystem.PlatformDataKeys
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.psi.JavaPsiFacade
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.ui.DoubleClickListener
 import com.intellij.ui.ScrollPaneFactory
@@ -47,39 +47,28 @@ import com.intellij.xdebugger.impl.frame.XWatchesViewImpl
 import com.intellij.xdebugger.impl.ui.DebuggerUIUtil
 import com.intellij.xdebugger.impl.ui.tree.nodes.XDebuggerTreeNode
 import com.intellij.xdebugger.impl.ui.tree.nodes.XValueContainerNode
-import com.intellij.xdebugger.impl.ui.tree.nodes.XValueNodeImpl
 import com.sun.jdi.ArrayReference
 import com.sun.jdi.ClassType
 import com.sun.jdi.ObjectReference
 import com.sun.jdi.StringReference
 import org.jetbrains.annotations.NonNls
 import org.jetbrains.kotlin.idea.debugger.evaluate.ExecutionContext
-import org.jetbrains.kotlin.load.kotlin.VirtualFileFinderFactory
-import org.jetbrains.kotlin.name.ClassId
-import org.jetbrains.kotlin.name.FqName
+import org.jetbrains.kotlin.idea.debugger.evaluate.createExecutionContext
 import java.awt.BorderLayout
-import java.awt.event.KeyAdapter
-import java.awt.event.KeyEvent
 import java.awt.event.MouseEvent
 import java.util.*
 import javax.swing.JTree
 
+/**
+ * @author Aleksandr Prokopyev
+ * Actually added into ui in [CoroutinesDebugConfigurationExtension.registerCoroutinesPanel]
+ */
 class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : DebuggerTreePanel(project, stateManager) {
-    @NonNls
-    private val HELP_ID = "debugging.debugCoroutines"
     private val myUpdateLabelsAlarm = Alarm(Alarm.ThreadToUse.SWING_THREAD)
-    private val LABELS_UPDATE_DELAY_MS = 200
 
     init {
         val disposable = installAction(getCoroutinesTree(), DebuggerActions.EDIT_FRAME_SOURCE)
         registerDisposable(disposable)
-        getCoroutinesTree().addKeyListener(object : KeyAdapter() {
-            override fun keyPressed(e: KeyEvent?) {
-                if (e!!.keyCode == KeyEvent.VK_ENTER && getCoroutinesTree().selectionCount == 1) {
-                    GotoFrameSourceAction.doAction(DataManager.getInstance().getDataContext(getCoroutinesTree()))
-                }
-            }
-        })
         add(ScrollPaneFactory.createScrollPane(getCoroutinesTree()), BorderLayout.CENTER)
         stateManager.addListener(object : DebuggerContextListener {
             override fun changeEvent(newContext: DebuggerContextImpl, event: DebuggerSession.Event) {
@@ -98,22 +87,25 @@ class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : De
 
     @Suppress("SameParameterValue")
     private fun installAction(tree: JTree, actionName: String): () -> Unit {
-        val finderFactory = VirtualFileFinderFactory.getInstance(project)
+        val psiFacade = JavaPsiFacade.getInstance(project)
+
         val listener = object : DoubleClickListener() {
             override fun onDoubleClick(e: MouseEvent): Boolean {
                 val location = tree.getPathForLocation(e.x, e.y)?.lastPathComponent as? DebuggerTreeNodeImpl ?: return false
                 val dataContext = DataManager.getInstance().getDataContext(tree)
                 val context = DebuggerManagerEx.getInstanceEx(project).context
                 val view = (context.debuggerSession!!.xDebugSession as XDebugSessionImpl).sessionTab!!.watchesView as XWatchesViewImpl
-                // TODO use debugger search scope
-                val fileFinder = finderFactory.create(GlobalSearchScope.allScope(project))
                 when (val descriptor = location.userObject) {
                     is CoroutinesDebuggerTree.SuspendStackFrameDescriptor -> {
                         val trace = descriptor.frame
-                        val classFile = fileFinder.findVirtualFileWithHeader(ClassId.topLevel(FqName(trace.className)))
-                        // TODO null if inner class is given
+                        val psiClass = psiFacade.findClass(trace.className.substringBefore("$"), GlobalSearchScope.everythingScope(project))
+                        val classFile = psiClass?.containingFile?.virtualFile
                         val pos = XDebuggerUtil.getInstance().createPosition(classFile, trace.lineNumber) ?: return false
-                        view.buildTreeAndRestoreState(pos, context, descriptor)
+                        context.debugProcess?.managerThread?.schedule(object : DebuggerCommandImpl() {
+                            override fun action() {
+                                view.buildTreeAndRestoreState(pos, context, descriptor)
+                            }
+                        })
                         return true
 
                     }
@@ -121,7 +113,7 @@ class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : De
                         GotoFrameSourceAction.doAction(dataContext)
                         return true
                     }
-                    else -> return true // TODO
+                    else -> return true
                 }
 
             }
@@ -153,8 +145,7 @@ class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : De
                                                               object : XValueContainer() {}) {})
             .apply {
                 this@createNewRootNode.tree.setRoot(this, false)
-                val evalContext = context.createEvaluationContext()
-                val execContext = ExecutionContext(evalContext ?: return@apply, evalContext.frameProxy ?: return@apply)
+                val execContext = context.createExecutionContext() ?: return@apply
                 val debugMetadataKtType = execContext.findClass("kotlin.coroutines.jvm.internal.DebugMetadataKt") as ClassType
                 val vars = getSpilledVariables(descriptor.state.frame ?: return@apply, debugMetadataKtType, execContext)
                 val children = XValueChildrenList()
@@ -165,7 +156,11 @@ class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : De
             }
     }
 
-    fun getSpilledVariables(continuation: ObjectReference, debugMetadataKtType: ClassType, context: ExecutionContext): List<XNamedValue>? {
+    private fun getSpilledVariables(
+        continuation: ObjectReference,
+        debugMetadataKtType: ClassType,
+        context: ExecutionContext
+    ): List<XNamedValue>? {
         val getSpilledVariableFieldMappingMethod = debugMetadataKtType.methodsByName(
             "getSpilledVariableFieldMapping",
             "(Lkotlin/coroutines/jvm/internal/BaseContinuationImpl;)[Ljava/lang/String;"
@@ -255,7 +250,6 @@ class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : De
         super.dispose()
     }
 
-    // TODO
     private fun updateNodeLabels(from: DebuggerTreeNodeImpl) {
         val children = from.children()
         try {
@@ -271,7 +265,6 @@ class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : De
 
     }
 
-    // ok
     override fun createTreeView(): DebuggerTree {
         return CoroutinesDebuggerTree(project)
     }
@@ -282,14 +275,18 @@ class CoroutinesPanel(project: Project, stateManager: DebuggerStateManager) : De
         return ActionManager.getInstance().createActionPopupMenu(DebuggerActions.THREADS_PANEL_POPUP, group)
     }
 
-    // ok
     override fun getData(dataId: String): Any? {
         return if (PlatformDataKeys.HELP_ID.`is`(dataId)) {
             HELP_ID
         } else super.getData(dataId)
     }
 
-    // TODO
     fun getCoroutinesTree(): CoroutinesDebuggerTree = tree as CoroutinesDebuggerTree
+
+    companion object {
+        @NonNls
+        private val HELP_ID = "debugging.debugCoroutines"
+        private const val LABELS_UPDATE_DELAY_MS = 200
+    }
 
 }

@@ -28,6 +28,9 @@ import com.sun.tools.jdi.ObjectReferenceImpl
 import com.sun.tools.jdi.StringReferenceImpl
 import org.jetbrains.kotlin.idea.debugger.evaluate.ExecutionContext
 
+/**
+ * @author Aleksandr Prokopyev
+ */
 class CoroutineDumpAction : AnAction(), AnAction.TransparentUpdate {
     val logger = Logger.getInstance(this::class.java)
 
@@ -60,22 +63,22 @@ class CoroutineDumpAction : AnAction(), AnAction.TransparentUpdate {
     }
 
     companion object {
+        private const val PATH = "kotlinx.coroutines.debug"
         /**
          * Invokes DebugProbes from debugged process's classpath and returns states of coroutines
          * Should be invoked on debugger manager thread
          */
         fun buildCoroutineStates(context: ExecutionContext): List<CoroutineState> {
-            val path = "kotlinx.coroutines.debug"
             // kotlinx.coroutines.debug.DebugProbes instance and methods
-            val debugProbes = context.findClass("$path.DebugProbes") as ClassType
-            val debugProbesImplType = context.findClass("$path.internal.DebugProbesImpl") as ClassType
+            val debugProbes = context.findClass("$PATH.DebugProbes") as ClassType
+            val debugProbesImplType = context.findClass("$PATH.internal.DebugProbesImpl") as ClassType
             val debugProbesImpl = debugProbesImplType.getValue(debugProbesImplType.fieldByName("INSTANCE")) as ObjectReferenceImpl
             val enhanceStackTraceWithThreadDump = debugProbesImplType.methodsByName("enhanceStackTraceWithThreadDump").first()
             val dumpMethod = debugProbes.methodsByName("dumpCoroutinesInfo", "()Ljava/util/List;").first()
             val instance = debugProbes.getValue(debugProbes.fieldByName("INSTANCE")) as ObjectReference
 
             // CoroutineInfo
-            val info = context.findClass("$path.CoroutineInfo") as ClassType
+            val info = context.findClass("$PATH.CoroutineInfo") as ClassType
             val getState = info.methodsByName("getState").first()
             val getContext = info.methodsByName("getContext").first()
             val idField = info.fieldByName("sequenceNumber")
@@ -91,7 +94,8 @@ class CoroutineDumpAction : AnAction(), AnAction.TransparentUpdate {
 
             // get dump
             val infoList = context.invokeMethod(instance, dumpMethod, emptyList()) as ObjectReferenceImpl
-            // Methods to work with list
+
+            // Methods for list
             val listType = context.findClass("java.util.List") as InterfaceType
             val getSize = listType.methodsByName("size").first()
             val getElement = listType.methodsByName("get").first()
@@ -124,7 +128,7 @@ class CoroutineDumpAction : AnAction(), AnAction.TransparentUpdate {
         }
 
         /**
-         * Converts [ObjectReferenceImpl] into [CoroutineState]
+         * Converts [ObjectReferenceImpl] of CoroutineInfo into [CoroutineState]
          */
         private fun refToState(
             context: ExecutionContext, // Execution context to invoke methods
@@ -136,7 +140,7 @@ class CoroutineDumpAction : AnAction(), AnAction.TransparentUpdate {
             nameKey: ObjectReferenceImpl, // CoroutineName companion object
             getName: Method, // CoroutineName.getName()
             idField: Field, // CoroutineId.idField()
-            threadRef: Field
+            threadRef: Field // reference to lastObservedThread
         ): CoroutineState {
             //  stringState = coroutineInfo.state.toString()
             val state = context.invokeMethod(info, getState, emptyList()) as ObjectReferenceImpl
@@ -178,26 +182,30 @@ class CoroutineDumpAction : AnAction(), AnAction.TransparentUpdate {
             ) as ObjectReferenceImpl
             val size = (context.invokeMethod(mergedFrameList, getSize, emptyList()) as IntegerValue).value()
 
-            return List(size) {
+            val list = ArrayList<StackTraceElement>()
+            for (it in size - 1 downTo 0) {
                 val frame = context.invokeMethod(
                     mergedFrameList, getElement,
                     listOf(context.vm.virtualMachine.mirrorOf(it))
                 ) as ObjectReferenceImpl
-                with(frame) {
+                val clazz = (frame.getValue(element.fieldByName("declaringClass")) as StringReference).value()
+                if (clazz.contains(PATH)) break // cut off debug intrinsic stacktrace
+                list.add(
+                    0, // add in the beginning
                     StackTraceElement(
-                        (getValue(element.fieldByName("declaringClass")) as StringReference).value(),
-                        (getValue(element.fieldByName("methodName")) as StringReference).value(),
-                        (getValue(element.fieldByName("fileName")) as StringReference?)?.value(),
-                        (getValue(element.fieldByName("lineNumber")) as IntegerValue).value()
+                        clazz,
+                        (frame.getValue(element.fieldByName("methodName")) as StringReference).value(),
+                        (frame.getValue(element.fieldByName("fileName")) as StringReference?)?.value(),
+                        (frame.getValue(element.fieldByName("lineNumber")) as IntegerValue).value()
                     )
-                }
+                )
             }
-
+            return list
         }
     }
 
     /**
-     * Analog of [DebuggerUtilsEx.addThreadDump]. Doesn't need to be a [DebuggerUtilsEx] member.
+     * Analog of [DebuggerUtilsEx.addThreadDump].
      */
     fun addCoroutineDump(project: Project, coroutines: List<CoroutineState>, ui: RunnerLayoutUi, searchScope: GlobalSearchScope) {
         val consoleBuilder = TextConsoleBuilderFactory.getInstance().createBuilder(project)
@@ -216,43 +224,7 @@ class CoroutineDumpAction : AnAction(), AnAction.TransparentUpdate {
         ui.selectAndFocus(content, true, true)
         Disposer.register(content, consoleView)
         ui.selectAndFocus(content, true, false)
-        if (coroutines.isNotEmpty()) panel.selectStackFrame(0)
     }
-
-//    private fun threadStatusToJavaThreadState(status: Int): String {
-//        when (status) {
-//            ThreadReference.THREAD_STATUS_MONITOR -> return Thread.State.BLOCKED.name
-//            ThreadReference.THREAD_STATUS_NOT_STARTED -> return Thread.State.NEW.name
-//            ThreadReference.THREAD_STATUS_RUNNING -> return Thread.State.RUNNABLE.name
-//            ThreadReference.THREAD_STATUS_SLEEPING -> return Thread.State.TIMED_WAITING.name
-//            ThreadReference.THREAD_STATUS_WAIT -> return Thread.State.WAITING.name
-//            ThreadReference.THREAD_STATUS_ZOMBIE -> return Thread.State.TERMINATED.name
-//            ThreadReference.THREAD_STATUS_UNKNOWN -> return "unknown"
-//            else -> return "undefined"
-//        }
-//    }
-
-//    private fun threadStatusToState(status: Int): String {
-//        when (status) {
-//            ThreadReference.THREAD_STATUS_MONITOR -> return "waiting for monitor entry"
-//            ThreadReference.THREAD_STATUS_NOT_STARTED -> return "not started"
-//            ThreadReference.THREAD_STATUS_RUNNING -> return "runnable"
-//            ThreadReference.THREAD_STATUS_SLEEPING -> return "sleeping"
-//            ThreadReference.THREAD_STATUS_WAIT -> return "waiting"
-//            ThreadReference.THREAD_STATUS_ZOMBIE -> return "zombie"
-//            ThreadReference.THREAD_STATUS_UNKNOWN -> return "unknown"
-//            else -> return "undefined"
-//        }
-//    }
-
-//    fun renderLocation(location: Location): String {
-//        return DebuggerBundle.message(
-//            "export.threads.stackframe.format",
-//            DebuggerUtilsEx.getLocationMethodQName(location),
-//            DebuggerUtilsEx.getSourceName(location) { e -> "Unknown Source" },
-//            DebuggerUtilsEx.getLineNumber(location, false)
-//        )
-//    }
 
     override fun update(e: AnActionEvent) {
         val presentation = e.presentation

@@ -68,21 +68,21 @@
                     icon="/org/jetbrains/kotlin/idea/icons/kotlin.png"
                     text="Show Kotlin variables only"
             />
+<!--            TODO(design)-->
             <action id="Kotlin.XDebugger.CoroutinesDump"
                 class="org.jetbrains.kotlin.idea.debugger.CoroutineDumpAction"
             text="Get Coroutines Dump"
-            icon="/org/jetbrains/kotlin/idea/icons/kotlin.png">
-<!--                <add-to-group group-id="XDebugger.ToolWindow.LeftToolbar" anchor="after"/>-->
-            </action>
+            icon="/org/jetbrains/kotlin/idea/icons/kotlin.png"/>
         </group>
 
         <group id="Kotlin.XDebugger.Watches.Tree.Toolbar">
             <reference ref="Kotlin.XDebugger.ToggleKotlinVariableView"/>
             <add-to-group group-id="XDebugger.Watches.Tree.Toolbar" relative-to-action="XDebugger.SwitchWatchesInVariables" anchor="after"/>
         </group>
-<!--        TODO That's a little crappy yet-->
         <group id="Kotlin.XDebugger.Watches.Tree.LeftToolbar">
+            <separator/>
             <reference ref="Kotlin.XDebugger.CoroutinesDump"/>
+            <separator/>
             <add-to-group group-id="XDebugger.ToolWindow.LeftToolbar" relative-to-action="DumpThreads" anchor="after"/>
         </group>
     </actions>

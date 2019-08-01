@@ -39,6 +39,10 @@ import java.io.File
 import javax.swing.*
 import javax.swing.event.DocumentEvent
 
+/**
+ * Panel with dump of coroutines
+ * @author Aleksandr Prokopyev
+ */
 class CoroutineDumpPanel(project: Project, consoleView: ConsoleView, toolbarActions: DefaultActionGroup, val dump: List<CoroutineState>) :
     JPanel(BorderLayout()), DataProvider {
     private var exporterToTextFile: ExporterToTextFile
@@ -83,7 +87,6 @@ class CoroutineDumpPanel(project: Project, consoleView: ConsoleView, toolbarActi
         }
         toolbarActions.add(filterAction)
         toolbarActions.add(CopyToClipboardAction(dump, project))
-//        toolbarActions.add(SortThreadsAction())
         toolbarActions.add(ActionManager.getInstance().getAction(IdeActions.ACTION_EXPORT_TO_TEXT_FILE))
         toolbarActions.add(MergeStacktracesAction())
         add(ActionManager.getInstance().createActionToolbar("CoroutinesDump", toolbarActions, false).component, BorderLayout.WEST)
@@ -135,11 +138,6 @@ class CoroutineDumpPanel(project: Project, consoleView: ConsoleView, toolbarActi
         }
         coroutinesList.revalidate()
         coroutinesList.repaint()
-    }
-
-    // TODO
-    fun selectStackFrame(index: Int) {
-
     }
 
     internal fun highlightOccurrences(filter: String, project: Project, editor: Editor) {

@@ -1,12 +1,9 @@
 package org.jetbrains.kotlin.idea.debugger
 
 import com.intellij.debugger.DebuggerBundle
-import com.intellij.debugger.DebuggerContext
 import com.intellij.debugger.DebuggerInvocationUtil
 import com.intellij.debugger.DebuggerManagerEx
 import com.intellij.debugger.engine.DebugProcessImpl
-import com.intellij.debugger.engine.DebuggerManagerThreadImpl
-import com.intellij.debugger.engine.JavaValue
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.evaluation.EvaluateException
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
@@ -16,31 +13,30 @@ import com.intellij.debugger.impl.DebuggerSession
 import com.intellij.debugger.impl.descriptors.data.DescriptorData
 import com.intellij.debugger.impl.descriptors.data.DisplayKey
 import com.intellij.debugger.impl.descriptors.data.SimpleDisplayKey
-import com.intellij.debugger.impl.descriptors.data.StackFrameData
 import com.intellij.debugger.jdi.StackFrameProxyImpl
 import com.intellij.debugger.jdi.ThreadReferenceProxyImpl
 import com.intellij.debugger.ui.impl.tree.TreeBuilder
 import com.intellij.debugger.ui.impl.tree.TreeBuilderNode
 import com.intellij.debugger.ui.impl.watch.*
+import com.intellij.debugger.ui.tree.StackFrameDescriptor
 import com.intellij.debugger.ui.tree.render.DescriptorLabelListener
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.ui.SpeedSearchComparator
 import com.intellij.ui.TreeSpeedSearch
-import com.intellij.xdebugger.frame.XNamedValue
-import com.sun.jdi.ArrayReference
 import com.sun.jdi.ClassType
-import com.sun.jdi.StringReference
 import org.jetbrains.kotlin.idea.debugger.evaluate.ExecutionContext
-import com.sun.jdi.ObjectReference
+import org.jetbrains.kotlin.idea.debugger.evaluate.createExecutionContext
 import javax.swing.Icon
 import javax.swing.event.TreeModelEvent
 import javax.swing.event.TreeModelListener
 
+/**
+ * Tree of coroutines for [CoroutinesPanel]
+ * @author Aleksandr Prokopyev
+ */
 class CoroutinesDebuggerTree(project: Project) : DebuggerTree(project) {
-    private val logger = Logger.getInstance("#com.intellij.debugger.ui.impl.CoroutinesDebuggerTree")
 
     override fun createNodeManager(project: Project): NodeManagerImpl {
         return object : NodeManagerImpl(project, this) {
@@ -101,15 +97,19 @@ class CoroutinesDebuggerTree(project: Project) : DebuggerTree(project) {
                     descriptor.state.thread
                 )
                 val frames = proxy.forceFrames()
-                frames.forEach { frame ->
-                    children.add(createFrameDescriptor(descriptor, evalContext, frame))
+                var i = frames.lastIndex
+                while (i > 0 && frames[i].location().method().name() != "resumeWith") i--
+                for (frame in 0..i) {
+                    children.add(createFrameDescriptor(descriptor, evalContext, frames[frame]))
+                    if (frames[frame].stackFrame.location().method().name() == "resumeWith") break // TODO add async stack trace
                 }
             }
             "SUSPENDED" -> {
                 descriptor.state.stackTrace.forEach {
-                    children.add(createCoroutineFrameDescriptor(descriptor, evalContext, it))
+                    if (it.methodName != "\b")
+                        children.add(createCoroutineFrameDescriptor(descriptor, evalContext, it))
                 }
-                // TODO add vars to other place, here should be stacktrace
+
             }
         }
     }
@@ -162,7 +162,7 @@ class CoroutinesDebuggerTree(project: Project) : DebuggerTree(project) {
 
     override fun isExpandable(node: DebuggerTreeNodeImpl): Boolean {
         val descriptor = node.descriptor
-        return descriptor.isExpandable
+        return if (descriptor is StackFrameDescriptor) return false else descriptor.isExpandable
     }
 
     override fun build(context: DebuggerContextImpl) {
@@ -236,15 +236,13 @@ class CoroutinesDebuggerTree(project: Project) : DebuggerTree(project) {
             return myName
         }
 
-        // TODO
         @Throws(EvaluateException::class)
         override fun calcRepresentation(context: EvaluationContextImpl?, labelListener: DescriptorLabelListener): String {
-            DebuggerManagerThreadImpl.assertIsManagerThread()
             return "${state.name}: ${state.state}"
         }
 
         override fun isExpandable(): Boolean {
-            return state.state != "CREATED" // TODO
+            return state.state != "CREATED"
         }
 
         override fun setContext(context: EvaluationContextImpl?) {
@@ -263,21 +261,38 @@ class CoroutinesDebuggerTree(project: Project) : DebuggerTree(project) {
             } else false
         }
 
+        /**
+         * Returns [EmptyStackFrameDescriptor] or [SuspendStackFrameDescriptor] according to current frame
+         */
         override fun createDescriptorImpl(project: Project): NodeDescriptorImpl {
-            return SuspendStackFrameDescriptor(state, frame) // TODO
+            // check whether last fun is suspend fun
+            val context = DebuggerManagerEx.getInstanceEx(project).context.createExecutionContext()
+            val clazz = context?.findClass(frame.className) as ClassType
+            val method = clazz.methodsByName(frame.methodName).last {
+                val loc = it.location().lineNumber()
+                loc < 0 && frame.lineNumber == loc || loc > 0 && loc <= frame.lineNumber
+            } // pick correct method if an overloaded one is given
+            return if ("Lkotlin/coroutines/Continuation;)" in method.signature() ||
+                method.name() == "invokeSuspend" &&
+                method.signature() == "(Ljava/lang/Object;)Ljava/lang/Object;" // suspend fun or invokeSuspend
+            ) SuspendStackFrameDescriptor(state, frame)
+            else EmptyStackFrameDescriptor(frame)
         }
 
         override fun getDisplayKey(): DisplayKey<NodeDescriptorImpl> = SimpleDisplayKey(frame)
     }
 
+    /**
+     * Descriptor for suspend functions
+     */
     class SuspendStackFrameDescriptor(val state: CoroutineState, val frame: StackTraceElement) :
         NodeDescriptorImpl() {
         override fun calcRepresentation(context: EvaluationContextImpl?, labelListener: DescriptorLabelListener?): String {
-            return "${frame.methodName}:${frame.lineNumber}, ${frame.className}" // TODO package
+            val pack = frame.className.substringBeforeLast(".", "")
+            return "${frame.methodName}:${frame.lineNumber}, ${frame.className.substringAfterLast(".")} ${if (pack.isNotEmpty()) "{$pack}" else ""}"
         }
 
         override fun setContext(context: EvaluationContextImpl?) {
-//            TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
         }
 
         override fun isExpandable() = false
@@ -288,10 +303,12 @@ class CoroutinesDebuggerTree(project: Project) : DebuggerTree(project) {
      */
     class EmptyStackFrameDescriptor(val frame: StackTraceElement) : NodeDescriptorImpl() {
         override fun calcRepresentation(context: EvaluationContextImpl?, labelListener: DescriptorLabelListener?): String {
-            return "${frame.methodName}:${frame.lineNumber}, ${frame.className}" // TODO package
+            val pack = frame.className.substringBeforeLast(".", "")
+            return "${frame.methodName}:${frame.lineNumber}, ${frame.className.substringAfterLast(".")} ${if (pack.isNotEmpty()) "{$pack}" else ""}"
         }
 
         override fun setContext(context: EvaluationContextImpl?) {
+
         }
 
         override fun isExpandable() = false

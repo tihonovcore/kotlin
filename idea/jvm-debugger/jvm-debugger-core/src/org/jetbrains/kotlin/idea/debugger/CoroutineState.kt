@@ -14,11 +14,11 @@ import com.sun.jdi.ThreadReference
  */
 open class CoroutineState(
     val name: String,
-    var state: String,
-    var thread: ThreadReference? = null
+    val state: String,
+    val thread: ThreadReference? = null
 ) {
     var frame: ObjectReference? = null
-    var isSuspended: Boolean = state == "SUSPENDED"
+    val isSuspended: Boolean = state == "SUSPENDED"
     val isEmptyStackTrace: Boolean by lazy { stackTrace.isEmpty() }
     var coroutineStateDetail: String? = state
     lateinit var stackTrace: List<StackTraceElement>

@@ -9,6 +9,7 @@ import com.intellij.debugger.DebuggerManagerEx
 import com.intellij.debugger.impl.DebuggerSession
 import com.intellij.debugger.ui.DebuggerContentInfo
 import com.intellij.execution.RunConfigurationExtension
+import com.intellij.execution.configurations.DebuggingRunnerData
 import com.intellij.execution.configurations.JavaParameters
 import com.intellij.execution.configurations.RunConfigurationBase
 import com.intellij.execution.configurations.RunnerSettings
@@ -21,12 +22,16 @@ import com.intellij.xdebugger.XDebugProcess
 import com.intellij.xdebugger.XDebuggerManager
 import com.intellij.xdebugger.XDebuggerManagerListener
 
-
+/**
+ * Install's coroutines debug agent and coroutines tab if `kotlinx.coroutines.debug` dependency is found
+ * @author Aleksandr Prokopyev
+ */
 @Suppress("IncompatibleAPI")
 class CoroutinesDebugConfigurationExtension : RunConfigurationExtension() {
+    private var listenerCreated = false
 
     override fun isApplicableFor(configuration: RunConfigurationBase<*>): Boolean {
-//        TODO check if project is kotlin
+        // unable to check dependencies, so let it be true, since it patches only, when debug facility is found and launched in debug mode
         return true
     }
 
@@ -35,7 +40,7 @@ class CoroutinesDebugConfigurationExtension : RunConfigurationExtension() {
         params: JavaParameters?,
         runnerSettings: RunnerSettings?
     ) {
-        if (params != null && params.classPath != null && params.classPath.pathList.isNotEmpty()) {
+        if (runnerSettings is DebuggingRunnerData && params != null && params.classPath != null && params.classPath.pathList.isNotEmpty()) {
             params.classPath.pathList.forEach {
                 if (it.contains("kotlinx-coroutines-debug")) {
                     // if debug library is included into project, add agent which installs probes
@@ -43,42 +48,42 @@ class CoroutinesDebugConfigurationExtension : RunConfigurationExtension() {
                     params.vmParametersList?.add("-ea")
 
                     // add listener to put coroutines tab into debugger tab
-                    (configuration as RunConfigurationBase<*>).project.messageBus.connect().subscribe(
-                        XDebuggerManager.TOPIC,
-                        object : XDebuggerManagerListener {
-                            var tabCreated = false
-
-                            override fun processStarted(debugProcess: XDebugProcess) {
-                                if (!tabCreated) {
+                    if (!listenerCreated) { // prevent multiple listeners creation
+                        (configuration as RunConfigurationBase<*>).project.messageBus.connect().subscribe(
+                            XDebuggerManager.TOPIC,
+                            object : XDebuggerManagerListener {
+                                override fun processStarted(debugProcess: XDebugProcess) {
                                     val project = debugProcess.session.project
                                     val session = DebuggerManagerEx.getInstanceEx(project).context.debuggerSession
                                     DebuggerInvocationUtil.swingInvokeLater(project) {
                                         registerCoroutinesPanel(session?.xDebugSession?.ui ?: return@swingInvokeLater, session)
-                                        // some weird shit happens here (callback is called n times where n is number of project's runs), so
-                                        tabCreated = true
                                     }
                                 }
-                            }
-                        })
-                    return
+                            })
+                        listenerCreated = true
+                        return
+                    }
                 }
             }
 
         }
     }
 
+    /**
+     * Adds panel to XDebugSessionTab
+     */
     private fun registerCoroutinesPanel(ui: RunnerLayoutUi, session: DebuggerSession) {
         val panel = CoroutinesPanel(session.project, session.contextManager)
-        val threadsContent = ui.createContent(
-            DebuggerContentInfo.THREADS_CONTENT, panel, "Coroutines", // TODO
-            AllIcons.Debugger.AttachToProcess, null
+        val content = ui.createContent(
+            DebuggerContentInfo.THREADS_CONTENT, panel, "Coroutines", // TODO(design)
+            AllIcons.Debugger.ThreadGroup, null
         )
-        threadsContent.isCloseable = false
-        ui.addContent(threadsContent, 0, PlaceInGrid.left, true)
+        content.isCloseable = false
+        ui.addContent(content, 0, PlaceInGrid.left, true)
         ui.addListener(object : ContentManagerAdapter() {
             override fun selectionChanged(event: ContentManagerEvent) {
-                if (event.content === threadsContent) {
-                    if (threadsContent.isSelected) {
+                if (event.content === content) {
+                    if (content.isSelected) {
                         panel.setUpdateEnabled(true)
                         if (panel.isRefreshNeeded) {
                             panel.rebuildIfVisible(DebuggerSession.Event.CONTEXT)
@@ -88,6 +93,6 @@ class CoroutinesDebugConfigurationExtension : RunConfigurationExtension() {
                     }
                 }
             }
-        }, threadsContent)
+        }, content)
     }
 }
