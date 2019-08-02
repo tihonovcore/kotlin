@@ -40,22 +40,40 @@ public class TagsTestDataUtil {
     public static String insertInfoTags(List<HighlightInfo> highlights, String text) {
         List<HighlightTagPoint> highlightPoints = Lists.newArrayList();
         for (HighlightInfo highlight : highlights) {
-            highlightPoints.add(new HighlightTagPoint(highlight.startOffset, true, highlight));
-            highlightPoints.add(new HighlightTagPoint(highlight.endOffset, false, highlight));
+            highlightPoints.add(new HighlightTagPoint(highlight.getActualStartOffset(), true, highlight));
+            highlightPoints.add(new HighlightTagPoint(highlight.getActualEndOffset(), false, highlight));
         }
 
         return insertTagsInText(highlightPoints, text);
     }
 
+    public static String insertInfoTagsWithCaretAndSelection(List<HighlightInfo> highlights, @NotNull Editor editor) {
+        List<TagInfo> points = Lists.newArrayList();
+        addCaretAndSelectionPoints(editor, points);
+        for (HighlightInfo highlight : highlights) {
+            points.add(new HighlightTagPoint(highlight.getActualStartOffset(), true, highlight));
+            points.add(new HighlightTagPoint(highlight.getActualEndOffset(), false, highlight));
+        }
+
+        return insertTagsInText(points, editor.getDocument().getText());
+    }
+
     public static String generateTextWithCaretAndSelection(@NotNull Editor editor) {
         List<TagInfo> points = Lists.newArrayList();
+        addCaretAndSelectionPoints(editor, points);
+
+        return insertTagsInText(points, editor.getDocument().getText());
+    }
+
+    private static void addCaretAndSelectionPoints(
+            @NotNull Editor editor,
+            List<TagInfo> points
+    ) {
         points.add(new TagInfo<String>(editor.getCaretModel().getOffset(), true, "caret"));
         if (editor.getSelectionModel().hasSelection()) {
             points.add(new TagInfo<String>(editor.getSelectionModel().getSelectionStart(), true, "selection"));
             points.add(new TagInfo<String>(editor.getSelectionModel().getSelectionEnd(), false, "selection"));
         }
-
-        return insertTagsInText(points, editor.getDocument().getText());
     }
 
     public static String insertTagsInText(List<? extends TagInfo> tags, String text) {
@@ -165,17 +183,34 @@ public class TagsTestDataUtil {
         public String getAttributesString() {
             if (isStart) {
                 if (highlightInfo.getDescription() != null) {
-                    return String.format("textAttributesKey=\"%s\" descr=%s",
-                                         highlightInfo.forcedTextAttributesKey,
-                                         highlightInfo.getDescription());
+                    return String.format("descr=\"%s\" textAttributesKey=\"%s\"",
+                                         highlightInfo.getDescription(),
+                                         highlightInfo.forcedTextAttributesKey);
                 }
                 else {
-                    return String.format("textAttributesKey=\"%s\"", highlightInfo.forcedTextAttributesKey);
+                    return String.format("descr=\"null\" textAttributesKey=\"%s\"", highlightInfo.forcedTextAttributesKey);
                 }
             }
             else {
                 return "";
             }
+        }
+
+        @Override
+        public int compareTo(@NotNull TagInfo<?> other) {
+            int cmp = super.compareTo(other);
+            if (cmp != 0 || !(other instanceof HighlightTagPoint)) return cmp;
+
+            HighlightTagPoint o = (HighlightTagPoint) other;
+            if (isStart) {
+                if (highlightInfo.getDescription() != null) {
+                    return o.highlightInfo.getDescription() != null
+                           ? highlightInfo.getDescription().compareTo(o.highlightInfo.getDescription())
+                           : 1;
+                }
+                return o.highlightInfo.getDescription() != null ? -1 : 0;
+            }
+            return cmp;
         }
     }
 

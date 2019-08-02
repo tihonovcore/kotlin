@@ -26,7 +26,7 @@ public class HighlightingTestGenerated extends AbstractHighlightingTest {
     }
 
     public void testAllFilesPresentInHighlighter() throws Exception {
-        KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("idea/testData/highlighter"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.ANY, true);
+        KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("idea/testData/highlighter"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.ANY, true, "typing");
     }
 
     @TestMetadata("Annotations.kt")

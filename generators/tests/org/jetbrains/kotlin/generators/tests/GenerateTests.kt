@@ -280,7 +280,11 @@ fun main(args: Array<String>) {
         }
 
         testClass<AbstractHighlightingTest> {
-            model("highlighter")
+            model("highlighter", excludeDirs = listOf("typing"))
+        }
+
+        testClass<AbstractHighlightAndTypingTest> {
+            model("highlighter/typing", pattern = "^([\\w\\-_]+)\\.kt$")
         }
 
         testClass<AbstractDslHighlighterTest> {
@@ -1197,7 +1201,7 @@ fun main(args: Array<String>) {
         }
 
         testClass<AbstractPerformanceHighlightingTest> {
-            model("highlighter", testMethod = "doPerfTest")
+            model("highlighter", testMethod = "doPerfTest", excludeDirs = listOf("typing"))
         }
 
         testClass<AbstractPerformanceAddImportTest> {
