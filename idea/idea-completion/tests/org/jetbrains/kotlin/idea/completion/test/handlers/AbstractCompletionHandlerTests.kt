@@ -19,13 +19,16 @@ import org.jetbrains.kotlin.utils.addToStdlib.indexOfOrNull
 import java.io.File
 
 abstract class AbstractCompletionHandlerTest(private val defaultCompletionType: CompletionType) : CompletionHandlerTestBase() {
-    private val INVOCATION_COUNT_PREFIX = "INVOCATION_COUNT:"
-    private val LOOKUP_STRING_PREFIX = "ELEMENT:"
-    private val ELEMENT_TEXT_PREFIX = "ELEMENT_TEXT:"
-    private val TAIL_TEXT_PREFIX = "TAIL_TEXT:"
-    private val COMPLETION_CHAR_PREFIX = "CHAR:"
-    private val COMPLETION_CHARS_PREFIX = "CHARS:"
-    private val CODE_STYLE_SETTING_PREFIX = "CODE_STYLE_SETTING:"
+
+    companion object {
+        val INVOCATION_COUNT_PREFIX = "INVOCATION_COUNT:"
+        val LOOKUP_STRING_PREFIX = "ELEMENT:"
+        val ELEMENT_TEXT_PREFIX = "ELEMENT_TEXT:"
+        val TAIL_TEXT_PREFIX = "TAIL_TEXT:"
+        val COMPLETION_CHAR_PREFIX = "CHAR:"
+        val COMPLETION_CHARS_PREFIX = "CHARS:"
+        val CODE_STYLE_SETTING_PREFIX = "CODE_STYLE_SETTING:"
+    }
 
     protected open fun doTest(testPath: String) {
         setUpFixture(testPath)
@@ -70,6 +73,7 @@ abstract class AbstractCompletionHandlerTest(private val defaultCompletionType: 
             }
 
             doTestWithTextLoaded(
+                myFixture,
                 completionType,
                 invocationCount,
                 lookupString,
