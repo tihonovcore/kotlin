@@ -110,6 +110,10 @@ class LocalVariableResolver(
             val outType = propertyDescriptor.type
             typeInfo = facade.getTypeInfo(initializer, context.replaceExpectedType(outType))
             val dataFlowInfo = typeInfo.dataFlowInfo
+
+            if (typeInfo.type == null) {
+                context.trace.record(BindingContext.EXPRESSION_TYPE_INFO, initializer, KotlinTypeInfo(outType, dataFlowInfo))
+            }
             val type = typeInfo.type
             if (type != null) {
                 val initializerDataFlowValue = dataFlowValueFactory.createDataFlowValue(initializer, type, context)

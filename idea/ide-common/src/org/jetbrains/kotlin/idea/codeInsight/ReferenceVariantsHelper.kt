@@ -6,6 +6,7 @@
 package org.jetbrains.kotlin.idea.codeInsight
 
 import com.intellij.psi.PsiElement
+import org.jetbrains.kotlin.checkers.ReferenceVariantsProvider
 import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.config.LanguageVersionSettings
 import org.jetbrains.kotlin.descriptors.*
@@ -48,7 +49,10 @@ class ReferenceVariantsHelper(
     private val moduleDescriptor: ModuleDescriptor,
     private val visibilityFilter: (DeclarationDescriptor) -> Boolean,
     private val notProperties: Set<FqNameUnsafe> = setOf()
-) {
+) : ReferenceVariantsProvider {
+    override fun getAvailableReferences(expression: KtExpression) =
+        getReferenceVariants(expression, CallTypeAndReceiver.DEFAULT, DescriptorKindFilter.VARIABLES, { true })
+
     fun getReferenceVariants(
         expression: KtSimpleNameExpression,
         kindFilter: DescriptorKindFilter,
