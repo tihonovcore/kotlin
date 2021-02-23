@@ -49,6 +49,7 @@ import org.jetbrains.kotlin.resolve.lazy.KotlinCodeAnalyzer
 import org.jetbrains.kotlin.resolve.lazy.declarations.FileBasedDeclarationProviderFactory
 import org.jetbrains.kotlin.serialization.deserialization.MetadataPartProvider
 import org.jetbrains.kotlin.storage.StorageManager
+import org.jetbrains.kotlin.test.diploma.tokenize
 import org.jetbrains.kotlin.test.directives.JvmEnvironmentConfigurationDirectives
 import org.jetbrains.kotlin.test.model.DependencyKind
 import org.jetbrains.kotlin.test.model.FrontendFacade
@@ -74,6 +75,13 @@ class ClassicFrontendFacade(
         val configuration = compilerConfigurationProvider.getCompilerConfiguration(module)
 
         val ktFilesMap = testServices.sourceFileProvider.getKtFilesForSourceFiles(module.files, project).toMutableMap()
+
+//        TOKENIZATION
+//        tokenize(ktFilesMap.toList().first().second.text)
+
+//        GETTING PSI
+//        ktFilesMap.toList()[0].second.psiOrParent
+
         val languageVersionSettings = module.languageVersionSettings
 
         val sourceDependencies = module.dependencies.filter { it.kind == DependencyKind.Source }
