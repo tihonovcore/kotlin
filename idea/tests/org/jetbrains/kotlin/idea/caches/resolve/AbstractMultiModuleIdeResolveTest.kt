@@ -5,8 +5,7 @@
 
 package org.jetbrains.kotlin.idea.caches.resolve
 
-import com.intellij.openapi.module.ModuleManager
-import com.intellij.openapi.vfs.VfsUtilCore
+import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiManager
 import com.intellij.util.io.exists
@@ -16,6 +15,7 @@ import org.jetbrains.kotlin.checkers.diagnostics.factories.DebugInfoDiagnosticFa
 import org.jetbrains.kotlin.checkers.utils.CheckerTestUtil
 import org.jetbrains.kotlin.checkers.utils.DiagnosticsRenderingConfiguration
 import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
+import org.jetbrains.kotlin.diploma.*
 import org.jetbrains.kotlin.idea.codeInsight.ReferenceVariantsHelper
 import org.jetbrains.kotlin.idea.core.util.toVirtualFile
 import org.jetbrains.kotlin.idea.multiplatform.setupMppProjectFromTextFile
@@ -24,7 +24,7 @@ import org.jetbrains.kotlin.idea.resolve.frontendService
 import org.jetbrains.kotlin.idea.stubs.AbstractMultiModuleTest
 import org.jetbrains.kotlin.idea.test.PluginTestCaseBase
 import org.jetbrains.kotlin.idea.test.allKotlinFiles
-import org.jetbrains.kotlin.idea.util.sourceRoots
+import org.jetbrains.kotlin.psi.KtElement
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.test.KotlinTestUtils
 import java.io.File
@@ -44,13 +44,22 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
 
         project.allKotlinFiles()
 
-        val testFolder = File("/Users/victor.petukhov/IdeaProjects/kotlin-2/compiler/testData/diagnostics/_test")
+        val testFolder = File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/samples")
 
         testFolder.walkTopDown().forEach { file ->
             if (file.isDirectory || file.extension != "kt") return@forEach
 
             val tempSourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
-            checkFile(tempSourceKtFile, file)
+            val range2type = checkFile(tempSourceKtFile, file)
+
+            val someInnerElement = tempSourceKtFile.children[2].children.first()
+            getAllLeafPaths(root = tempSourceKtFile, from = someInnerElement).forEach { path ->
+                // NOTE: вроде бы от PSI там только комменты и пробелы,
+                // поэтому можно оставить только KtElement
+                println(path.filterIsInstance(KtElement::class.java).asPath(range2type, "↓ "))
+            }
+
+            //TODO: assert that `render` gets all types from r2t
         }
     }
 
@@ -71,7 +80,9 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
         return testSourcePath.toFile()
     }
 
-    protected open fun checkFile(file: KtFile, expectedFile: File) {
+    protected open fun checkFile(file: KtFile, expectedFile: File): MutableMap<TextRange, String> {
+        val range2type = mutableMapOf<TextRange, String>()
+
         val resolutionFacade = file.getResolutionFacade()
         val (bindingContext, moduleDescriptor) = resolutionFacade.analyzeWithAllCompilerChecks(listOf(file))
 
@@ -108,7 +119,8 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             getFileText = { it.text },
             uncheckedDiagnostics = emptyList(),
             withNewInferenceDirective = false,
-            renderDiagnosticMessages = true
+            renderDiagnosticMessages = true,
+            range2type
         ).toString()
 
         File("${expectedFile.parentFile.absolutePath}/${expectedFile.nameWithoutExtension}.ti.txt").writeText(
@@ -117,7 +129,7 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
 
         DebugInfoDiagnosticFactory1.recordedTypes.clear()
 
-        KotlinTestUtils.assertEqualsToFile(expectedFile, actualTextWithDiagnostics)
+        return range2type
     }
 }
 
