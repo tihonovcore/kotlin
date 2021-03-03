@@ -456,7 +456,8 @@ object CheckerTestUtil {
         getFileText: (PsiFile) -> String,
         uncheckedDiagnostics: Collection<PositionalTextDiagnostic>,
         withNewInferenceDirective: Boolean,
-        renderDiagnosticMessages: Boolean
+        renderDiagnosticMessages: Boolean,
+        range2type: MutableMap<TextRange, String> = mutableMapOf()
     ): StringBuffer {
         val text = getFileText(psiFile)
         val result = StringBuffer()
@@ -481,6 +482,7 @@ object CheckerTestUtil {
             while (currentDescriptor != null && i == currentDescriptor.start) {
                 val isSkip = openDiagnosticsString(
                     result,
+                    range2type,
                     currentDescriptor,
                     diagnosticToExpectedDiagnostic,
                     withNewInferenceDirective,
@@ -501,6 +503,7 @@ object CheckerTestUtil {
             assert(currentDescriptor.end == text.length)
             val isSkip = openDiagnosticsString(
                 result,
+                range2type,
                 currentDescriptor,
                 diagnosticToExpectedDiagnostic,
                 withNewInferenceDirective,
@@ -523,6 +526,7 @@ object CheckerTestUtil {
 
     private fun openDiagnosticsString(
         result: StringBuffer,
+        range2type: MutableMap<TextRange, String>,
         currentDescriptor: AbstractDiagnosticDescriptor,
         diagnosticToExpectedDiagnostic: Map<AbstractTestDiagnostic, TextDiagnostic>,
         withNewInferenceDirective: Boolean,
@@ -554,8 +558,13 @@ object CheckerTestUtil {
         }
 
         if (diagnosticsAsText.size != 0) {
-            diagnosticsAsText.sort()
-            result.append("<!${diagnosticsAsText.joinToString(", ")}!>")
+            val diagnostic = diagnosticsAsText.run {
+                sort()
+                joinToString()
+            }
+
+            range2type[currentDescriptor.textRange] = diagnostic
+            result.append("<!$diagnostic!>")
             isSkip = false
         }
 
