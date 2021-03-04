@@ -27,9 +27,7 @@ import org.jetbrains.kotlin.name.FqNameUnsafe
 import org.jetbrains.kotlin.platform.TargetPlatform
 import org.jetbrains.kotlin.platform.isCommon
 import org.jetbrains.kotlin.platform.oldFashionedDescription
-import org.jetbrains.kotlin.psi.KtCallableDeclaration
-import org.jetbrains.kotlin.psi.KtExpression
-import org.jetbrains.kotlin.psi.KtReferenceExpression
+import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.endOffset
 import org.jetbrains.kotlin.psi.psiUtil.startOffset
 import org.jetbrains.kotlin.resolve.AnalyzingUtils
@@ -118,36 +116,16 @@ object CheckerTestUtil {
         dataFlowValueFactory: DataFlowValueFactory?,
         moduleDescriptor: ModuleDescriptorImpl?,
         diagnosedRanges: MutableMap<IntRange, MutableSet<String>>? = null
-    ): MutableList<ActualDiagnostic> {
-        val diagnostics: MutableList<ActualDiagnostic> = mutableListOf()
-
-        bindingContext.diagnostics.forEach { diagnostic ->
-            if (PsiTreeUtil.isAncestor(root, diagnostic.psiElement, false)) {
-                diagnostics.add(ActualDiagnostic(diagnostic, configuration.platform, configuration.withNewInference))
-            }
-        }
-
-        for (errorElement in AnalyzingUtils.getSyntaxErrorRanges(root)) {
-            diagnostics.add(ActualDiagnostic(SyntaxErrorDiagnostic(errorElement), configuration.platform, configuration.withNewInference))
-        }
-
-        if (!configuration.skipDebugInfoDiagnostics) {
-            diagnostics.addAll(
-                getDebugInfoDiagnostics(
-                    root,
-                    bindingContext,
-                    markDynamicCalls,
-                    dynamicCallDescriptors,
-                    configuration,
-                    dataFlowValueFactory,
-                    moduleDescriptor,
-                    diagnosedRanges
-                )
-            )
-        }
-
-        return diagnostics
-    }
+    ) = getDebugInfoDiagnostics(
+        root,
+        bindingContext,
+        markDynamicCalls,
+        dynamicCallDescriptors,
+        configuration,
+        dataFlowValueFactory,
+        moduleDescriptor,
+        diagnosedRanges
+    )
 
     fun getDebugInfoDiagnostics(
         root: PsiElement,
@@ -158,7 +136,7 @@ object CheckerTestUtil {
         dataFlowValueFactory: DataFlowValueFactory?,
         moduleDescriptor: ModuleDescriptorImpl?,
         diagnosedRanges: Map<IntRange, MutableSet<String>>?
-    ): List<ActualDiagnostic> {
+    ): MutableList<ActualDiagnostic> {
         val debugAnnotations = mutableListOf<ActualDiagnostic>()
 
         DebugInfoUtil.markDebugAnnotations(
@@ -177,25 +155,13 @@ object CheckerTestUtil {
         //noinspection unchecked
 
         val factoryListForDiagnosticsOnExpression = listOf(
-            BindingContext.EXPRESSION_TYPE_INFO to DebugInfoDiagnosticFactory1.EXPRESSION_TYPE,
-            BindingContext.SMARTCAST to DebugInfoDiagnosticFactory0.SMARTCAST,
-            BindingContext.IMPLICIT_RECEIVER_SMARTCAST to DebugInfoDiagnosticFactory0.IMPLICIT_RECEIVER_SMARTCAST,
-            BindingContext.SMARTCAST_NULL to DebugInfoDiagnosticFactory0.CONSTANT,
-            BindingContext.LEAKING_THIS to DebugInfoDiagnosticFactory0.LEAKING_THIS,
-            BindingContext.IMPLICIT_EXHAUSTIVE_WHEN to DebugInfoDiagnosticFactory0.IMPLICIT_EXHAUSTIVE
+            BindingContext.EXPRESSION_TYPE_INFO to DebugInfoDiagnosticFactory1.EXPRESSION_TYPE
         )
-
-        val factoryListForDiagnosticsOnCall = listOf(BindingContext.RESOLVED_CALL to DebugInfoDiagnosticFactory1.CALL)
 
         renderDiagnosticsByFactoryList(
             factoryListForDiagnosticsOnExpression, root, bindingContext, configuration,
             dataFlowValueFactory, moduleDescriptor, diagnosedRanges, debugAnnotations
         )
-
-        renderDiagnosticsByFactoryList(
-            factoryListForDiagnosticsOnCall, root, bindingContext, configuration,
-            dataFlowValueFactory, moduleDescriptor, diagnosedRanges, debugAnnotations
-        ) { it.callElement as? KtExpression }
 
         return debugAnnotations
     }
@@ -234,10 +200,13 @@ object CheckerTestUtil {
         diagnosedRanges: Map<IntRange, MutableSet<String>>?,
         debugAnnotations: MutableList<ActualDiagnostic>
     ) {
+        assert(diagnosedRanges === diagnosedRanges)
+
         if (factory !is DiagnosticFactory<*>) return
 
-        val needRender = !factory.withExplicitDefinitionOnly
-                || diagnosedRanges?.get(expression.startOffset..expression.endOffset)?.contains(factory.name) == true
+        val needRender = expression !is KtBlockExpression && expression !is KtProperty
+//        val needRender = !factory.withExplicitDefinitionOnly
+//                || diagnosedRanges?.get(expression.startOffset..expression.endOffset)?.contains(factory.name) == true
 
         if (PsiTreeUtil.isAncestor(root, expression, false) && needRender) {
             val diagnostic = factory.createDiagnostic(
@@ -571,7 +540,7 @@ object CheckerTestUtil {
                     val expectedDiagnostic = diagnosticToExpectedDiagnostic[diagnostic]
                     val actualTextDiagnostic = TextDiagnostic.asTextDiagnostic(diagnostic)
 
-                    if (expectedDiagnostic != null || !hasExplicitDefinitionOnlyOption(diagnostic)) {
+                    if (expectedDiagnostic != null || hasExplicitDefinitionOnlyOption(diagnostic)) {
                         val shouldRenderParameters =
                             renderDiagnosticMessages || expectedDiagnostic?.parameters != null
 
