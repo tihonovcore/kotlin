@@ -126,9 +126,18 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             range2type
         ).toString()
 
-        File("${expectedFile.parentFile.absolutePath}/${expectedFile.nameWithoutExtension}.ti.txt").writeText(
-            DebugInfoDiagnosticFactory1.recordedTypes.map { (type, info) -> "${type}: ${info.first}, ${info.second}" }.joinToString("\n")
-        )
+//        fun write(suffix: String, text: String) {
+//            val outputDirName = expectedFile.parentFile.absolutePath
+//            val outputFileName = expectedFile.nameWithoutExtension + ".txt"
+//
+//            File("$outputDirName$suffix/$outputFileName").apply {
+//                parentFile.mkdirs()
+//                writeText(text)
+//            }
+//        }
+//
+//        write("_dumped_types", actualTextWithDiagnostics)
+//        write("_ti", DebugInfoDiagnosticFactory1.recordedTypes.map { (type, info) -> "${type}: ${info.first}, ${info.second}" }.joinToString("\n"))
 
         DebugInfoDiagnosticFactory1.recordedTypes.clear()
 

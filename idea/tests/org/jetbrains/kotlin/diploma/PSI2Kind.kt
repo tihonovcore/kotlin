@@ -7,11 +7,12 @@ package org.jetbrains.kotlin.diploma
 
 import org.jetbrains.kotlin.psi.*
 
+// TODO: probably PSI contains some more information
+// TODO: `*.text` and `*.name` should be embedded, marked for doing this later or removed
 val psi2kind = object : KtVisitor<String, Void?>() {
 
     override fun visitKtElement(element: KtElement, data: Void?) = element.node.elementType.toString()
 
-    // TODO: probably PSI contains some more information
     override fun visitNamedDeclaration(declaration: KtNamedDeclaration, data: Void?): String {
         return super.visitNamedDeclaration(declaration, data) + " " + declaration.name
     }
@@ -21,6 +22,20 @@ val psi2kind = object : KtVisitor<String, Void?>() {
     }
 
     override fun visitSimpleNameExpression(expression: KtSimpleNameExpression, data: Void?): String {
-        return super.visitSimpleNameExpression(expression, data) + " " + expression.name
+        return super.visitSimpleNameExpression(expression, data) + " " + expression.getReferencedName()
     }
+
+    override fun visitLiteralStringTemplateEntry(entry: KtLiteralStringTemplateEntry, data: Void?): String {
+        return super.visitLiteralStringTemplateEntry(entry, data) + " " + "\"${entry.text}\""
+    }
+
+    override fun visitEscapeStringTemplateEntry(entry: KtEscapeStringTemplateEntry, data: Void?): String {
+        return super.visitEscapeStringTemplateEntry(entry, data) + " " + "\"${entry.text}\""
+    }
+
+    // NOTE: there are some more StringEntry
+    // > visitStringTemplateEntry
+    // > visitStringTemplateEntryWithExpression
+    // > visitBlockStringTemplateEntry
+    // > visitSimpleNameStringTemplateEntry
 }
