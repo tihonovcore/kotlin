@@ -18,36 +18,37 @@ import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.diploma.*
 import org.jetbrains.kotlin.idea.codeInsight.ReferenceVariantsHelper
 import org.jetbrains.kotlin.idea.core.util.toVirtualFile
-import org.jetbrains.kotlin.idea.multiplatform.setupMppProjectFromTextFile
 import org.jetbrains.kotlin.idea.project.KotlinMultiplatformAnalysisModeComponent
 import org.jetbrains.kotlin.idea.codeMetaInfo.AbstractDiagnosticCodeMetaInfoTest
 import org.jetbrains.kotlin.idea.resolve.getDataFlowValueFactory
 import org.jetbrains.kotlin.idea.resolve.getLanguageVersionSettings
 import org.jetbrains.kotlin.idea.stubs.AbstractMultiModuleTest
 import org.jetbrains.kotlin.idea.test.PluginTestCaseBase
-import org.jetbrains.kotlin.idea.test.allKotlinFiles
-import org.jetbrains.kotlin.psi.KtElement
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.test.KotlinTestUtils
 import org.jetbrains.kotlin.test.TestMetadata
 import java.io.File
 import java.nio.file.Paths
 
-//TODO: почему-то нет типов, только "INFO"
 abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
     fun doTest() {
-        File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/samples").walkTopDown().forEach { file ->
+        File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/samples/small").walkTopDown().forEach { file ->
             if (file.isDirectory || file.extension != "kt") return@forEach
 
             val tempSourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
             val range2type = checkFile(tempSourceKtFile, file)
 
-            val someInnerElement = tempSourceKtFile.children[2].children.first()
-            getAllLeafPaths(root = tempSourceKtFile, from = someInnerElement).forEach { path ->
-                // NOTE: вроде бы от PSI там только комменты и пробелы,
-                // поэтому можно оставить только KtElement
-                println(path.filterIsInstance(KtElement::class.java).asPath(range2type, "↓ "))
-            }
+            println("########################### TREE")
+            tempSourceKtFile.renderTree(range2type)
+            print("\n\n\n")
+
+            prepareAndPrintDatasetSample(tempSourceKtFile, range2type, 3, 3, 3)
+//            val someInnerElement = tempSourceKtFile.children[2].children.first()
+//            getAllLeafPaths(root = tempSourceKtFile, from = someInnerElement).forEach { path ->
+//                // NOTE: вроде бы от PSI там только комменты и пробелы,
+//                // поэтому можно оставить только KtElement
+//                println(path.filterIsInstance(KtElement::class.java).asPath(range2type, "↓ "))
+//            }
 
             //TODO: assert that `render` gets all types from r2t
         }

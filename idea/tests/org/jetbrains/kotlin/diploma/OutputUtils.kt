@@ -48,7 +48,7 @@ private fun PsiElement.getAllLeafPaths(
     currentPath: List<PsiElement>
 ): List<List<PsiElement>> {
     return if (children.isEmpty()) {
-        listOf(currentPath + this)
+        listOf((currentPath + this).reversed())
     } else {
         val paths = mutableListOf<List<PsiElement>>()
         val actualChildren = if (root !== this) children + parent else children
