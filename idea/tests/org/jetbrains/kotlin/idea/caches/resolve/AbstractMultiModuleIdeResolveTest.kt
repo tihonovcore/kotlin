@@ -41,14 +41,7 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             println("########################### TREE")
             tempSourceKtFile.renderTree(range2type)
             print("\n\n\n")
-
             prepareAndPrintDatasetSample(tempSourceKtFile, range2type, 3, 3, 3)
-//            val someInnerElement = tempSourceKtFile.children[2].children.first()
-//            getAllLeafPaths(root = tempSourceKtFile, from = someInnerElement).forEach { path ->
-//                // NOTE: вроде бы от PSI там только комменты и пробелы,
-//                // поэтому можно оставить только KtElement
-//                println(path.filterIsInstance(KtElement::class.java).asPath(range2type, "↓ "))
-//            }
 
             //TODO: assert that `render` gets all types from r2t
         }
