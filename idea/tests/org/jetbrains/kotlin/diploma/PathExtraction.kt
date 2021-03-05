@@ -9,35 +9,47 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.psi.KtElement
 
+class DatasetSample(
+    val leafPaths: List<String>,
+    val rootPath: String,
+    val expectation: String
+) {
+    override fun toString(): String {
+        return with(StringBuilder()) {
+            fun <T> appendln(t: T) = append(t).append(System.lineSeparator())
+
+            appendln(leafPaths.size)
+            leafPaths.forEach { appendln(it) }
+            appendln(rootPath)
+            appendln(expectation)
+        }.toString()
+    }
+
+    companion object {
+        const val SAMPLE_SEPARATOR = "@@@"
+    }
+}
+
 /**
- * Берем `countSamples` вершин с глубины `depth`, их (TODO: и `nodeForPrediction - 1` их потомков)
- * будем предсказывать
+ * Берем `countSamples` вершин с глубины `depth`. Необходимо предсказать эти
+ * вершины и `nodeForPrediction - 1` их потомков
  */
-fun prepareAndPrintDatasetSample(
+fun createDatasetSamples(
     root: PsiElement,
     range2type: Map<TextRange, String>,
     depth: Int,
     countSamples: Int,
-    nodeForPrediction: Int
-) {
-    val maskedNodes = elementsFromDepth(root, depth).shuffled().take(countSamples)
-
-    maskedNodes.forEachIndexed { index, maskedElement ->
-        println("########################### $index")
-        println("##### LEAF PATHS: ")
-        getAllLeafPaths(root, maskedElement).forEach { path ->
-            println(path.toDatasetStyle(range2type))
-        }
-        println()
-        println("##### ROOT PATH: ")
-        getRootPath(root, maskedElement).also { path ->
-            println(path.toDatasetStyle(range2type))
-        }
-        println()
-        println("##### EXPECTED KIND: ${(maskedElement as KtElement).accept(psi2kind, null)}")
-        print("\n\n\n")
+    nodeForPrediction: Int // TODO: support several prediction
+): List<DatasetSample> = elementsFromDepth(root, depth)
+    .shuffled()
+    .take(countSamples)
+    .map { maskedElement ->
+        DatasetSample(
+            getAllLeafPaths(root, maskedElement).map { path -> path.toDatasetStyle(range2type) },
+            getRootPath(root, maskedElement).toDatasetStyle(range2type),
+            (maskedElement as KtElement).accept(psi2kind, null)
+        )
     }
-}
 
 private fun elementsFromDepth(psiElement: PsiElement, depth: Int): List<PsiElement> {
     if (depth == 0) {

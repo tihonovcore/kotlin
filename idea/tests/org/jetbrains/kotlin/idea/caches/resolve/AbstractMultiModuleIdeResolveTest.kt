@@ -31,19 +31,25 @@ import java.io.File
 import java.nio.file.Paths
 
 abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
+    private val sourceCodeDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/samples"
+    private val processedDataset = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/processedDataset.txt"
+
+    init {
+        File(processedDataset).writeText("")
+    }
+
     fun doTest() {
-        File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/samples/small").walkTopDown().forEach { file ->
+        File(sourceCodeDirectory).walkTopDown().forEach { file ->
             if (file.isDirectory || file.extension != "kt") return@forEach
 
-            val tempSourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
-            val range2type = checkFile(tempSourceKtFile, file)
+            val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
+            val range2type = checkFile(sourceKtFile, file)
 
-            println("########################### TREE")
-            tempSourceKtFile.renderTree(range2type)
-            print("\n\n\n")
-            prepareAndPrintDatasetSample(tempSourceKtFile, range2type, 3, 3, 3)
-
-            //TODO: assert that `render` gets all types from r2t
+            with(File(processedDataset)) {
+                createDatasetSamples(sourceKtFile, range2type, 3, 3, 3)
+                    .joinToString(DatasetSample.SAMPLE_SEPARATOR) { it.toString() }
+                    .also { appendText(it) }
+            }
         }
     }
 
