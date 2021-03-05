@@ -26,15 +26,24 @@ fun PsiElement.renderTree(
     children.forEach { it.renderTree(range2type, tab + 1) }
 }
 
-//TODO: add arrows ↓ ↑
-fun List<KtElement>.asPath(
-    range2type: Map<TextRange, String>,
-    separator: String
-) = joinToString(separator) { element ->
-    val kind = element.accept(psi2kind, null)
-    val type = range2type[element.textRange]
+fun List<PsiElement>.toDatasetStyle(range2type: Map<TextRange, String>): String {
+    // NOTE: вроде бы от PSI там только комменты и пробелы,
+    // поэтому можно оставить только KtElement
+    val ktElements = filterIsInstance(KtElement::class.java)
+    return ktElements.mapIndexed { index, element ->
+        val next = ktElements.getOrNull(index + 1)
+        val arrow = when {
+            next == null -> ""
+            element === next.parent -> "↓ "
+            element.parent === next -> "↑ "
+            else -> throw IllegalStateException("Neighbouring nodes aren't <parent, child> or <child, parent>")
+        }
 
-    if (type != null) "$kind # $type " else "$kind "
+        val kind = element.accept(psi2kind, null)
+        val type = range2type[element.textRange]
+
+        if (type != null) "$kind # $type $arrow" else "$kind $arrow"
+    }.joinToString("")
 }
 
 fun getAllLeafPaths(root: PsiElement, from: PsiElement): List<List<PsiElement>> {
@@ -48,7 +57,11 @@ private fun PsiElement.getAllLeafPaths(
     currentPath: List<PsiElement>
 ): List<List<PsiElement>> {
     return if (children.isEmpty()) {
-        listOf((currentPath + this).reversed())
+        if (this is KtElement) {
+            listOf((currentPath + this).reversed())
+        } else {
+            emptyList() //path to PsiWhiteSpace or PsiComment
+        }
     } else {
         val paths = mutableListOf<List<PsiElement>>()
         val actualChildren = if (root !== this) children + parent else children

@@ -9,6 +9,10 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.psi.KtElement
 
+/**
+ * Берем `countSamples` вершин с глубины `depth`, их (TODO: и `nodeForPrediction - 1` их потомков)
+ * будем предсказывать
+ */
 fun prepareAndPrintDatasetSample(
     root: PsiElement,
     range2type: Map<TextRange, String>,
@@ -20,15 +24,17 @@ fun prepareAndPrintDatasetSample(
 
     maskedNodes.forEachIndexed { index, maskedElement ->
         println("########################### $index")
-        println("LEAF PATHS: ")
+        println("##### LEAF PATHS: ")
         getAllLeafPaths(root, maskedElement).forEach { path ->
-            println(path.filterIsInstance(KtElement::class.java).asPath(range2type, "↓ "))
+            println(path.toDatasetStyle(range2type))
         }
-        println("ROOT PATH: ")
+        println()
+        println("##### ROOT PATH: ")
         getRootPath(root, maskedElement).also { path ->
-            println(path.filterIsInstance(KtElement::class.java).asPath(range2type, "↓ "))
+            println(path.toDatasetStyle(range2type))
         }
-        println("EXPECTED KIND: ${(maskedElement as KtElement).accept(psi2kind, null)}")
+        println()
+        println("##### EXPECTED KIND: ${(maskedElement as KtElement).accept(psi2kind, null)}")
         print("\n\n\n")
     }
 }
