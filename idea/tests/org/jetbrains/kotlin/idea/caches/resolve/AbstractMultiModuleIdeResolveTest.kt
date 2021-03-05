@@ -33,23 +33,10 @@ import org.jetbrains.kotlin.test.TestMetadata
 import java.io.File
 import java.nio.file.Paths
 
+//TODO: почему-то нет типов, только "INFO"
 abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
-    fun doTest(testDataPath: String) {
-        val testRoot = File(testDataPath)
-
-        val dependenciesTxt = File(testDataPath, "dependencies.txt")
-        require(dependenciesTxt.exists()) {
-            "${dependenciesTxt.absolutePath} does not exist. dependencies.txt is required"
-        }
-
-        // This will implicitly copy all source files to temporary directory, clearing them from diagnostic markup in process
-        setupMppProjectFromTextFile(testRoot)
-
-        project.allKotlinFiles()
-
-        val testFolder = File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/samples")
-
-        testFolder.walkTopDown().forEach { file ->
+    fun doTest() {
+        File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/samples").walkTopDown().forEach { file ->
             if (file.isDirectory || file.extension != "kt") return@forEach
 
             val tempSourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
@@ -122,7 +109,7 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             getFileText = { it.text },
             uncheckedDiagnostics = emptyList(),
             withNewInferenceDirective = false,
-            renderDiagnosticMessages = directives.contains(BaseDiagnosticsTest.RENDER_DIAGNOSTICS_MESSAGES),
+            renderDiagnosticMessages = true,
             range2type
         ).toString()
 
@@ -163,5 +150,5 @@ class PathExtractor : AbstractMultiModuleIdeResolveTest() {
     override fun getTestDataPath(): String = PluginTestCaseBase.getTestDataPathBase()
 
     @TestMetadata("pathExtractor")
-    fun testExtract() = doTest("/home/tihonovcore/diploma/kotlin/compiler/testData/codegen/box/callableReference/bound/array.kt")
+    fun testExtract() = doTest()
 }

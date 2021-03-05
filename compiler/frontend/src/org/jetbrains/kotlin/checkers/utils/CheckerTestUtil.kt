@@ -524,6 +524,7 @@ object CheckerTestUtil {
         return result
     }
 
+    //TODO: smth wrong here
     private fun openDiagnosticsString(
         result: StringBuffer,
         range2type: MutableMap<TextRange, String>,
