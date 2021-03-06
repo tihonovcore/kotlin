@@ -45,32 +45,3 @@ fun List<PsiElement>.toDatasetStyle(range2type: Map<TextRange, String>): String 
         if (type != null) "$kind # $type $arrow" else "$kind $arrow"
     }.joinToString("")
 }
-
-fun getAllLeafPaths(root: PsiElement, from: PsiElement): List<List<PsiElement>> {
-    val actualChild = from.parent
-    return actualChild.getAllLeafPaths(root, from, listOf(from))
-}
-
-private fun PsiElement.getAllLeafPaths(
-    root: PsiElement,
-    actualParent: PsiElement,
-    currentPath: List<PsiElement>
-): List<List<PsiElement>> {
-    return if (children.isEmpty()) {
-        if (this is KtElement) {
-            listOf((currentPath + this).reversed())
-        } else {
-            emptyList() //path to PsiWhiteSpace or PsiComment
-        }
-    } else {
-        val paths = mutableListOf<List<PsiElement>>()
-        val actualChildren = if (root !== this) children + parent else children
-
-        actualChildren.forEach { element ->
-            if (element === actualParent) return@forEach
-            paths += element.getAllLeafPaths(root, this, currentPath + this)
-        }
-
-        paths
-    }
-}

@@ -42,14 +42,45 @@ fun createDatasetSamples(
     nodeForPrediction: Int // TODO: support several prediction
 ): List<DatasetSample> = elementsFromDepth(root, depth)
     .shuffled()
+    .filterIsInstance(KtElement::class.java)
     .take(countSamples)
     .map { maskedElement ->
         DatasetSample(
             getAllLeafPaths(root, maskedElement).map { path -> path.toDatasetStyle(range2type) },
             getRootPath(root, maskedElement).toDatasetStyle(range2type),
-            (maskedElement as KtElement).accept(psi2kind, null)
+            maskedElement.accept(psi2kind, null)
         )
     }
+
+private fun getAllLeafPaths(root: PsiElement, from: PsiElement): List<List<PsiElement>> {
+    fun PsiElement.successors(): List<PsiElement> {
+        if (children.isEmpty()) return listOf(this)
+
+        return children.fold(mutableListOf(), { successors, element ->
+            successors.apply { this += element.successors() }
+        })
+    }
+
+    fun leafPaths(root: PsiElement, from: PsiElement, currentPath: List<PsiElement> = emptyList()): List<List<PsiElement>> {
+        return when {
+            from.children.isNotEmpty() -> {
+                val actualChildren = if (from === root) from.children else from.children + from.parent
+                val previousElementInPath = currentPath.lastOrNull()
+
+                actualChildren.fold(mutableListOf(), { paths, element ->
+                    if (element === previousElementInPath) return@fold paths
+                    paths.apply { this += leafPaths(root, element, currentPath + from) }
+                })
+            }
+            from is KtElement -> listOf(currentPath + from)
+            else -> emptyList() //PsiComment, PsiWhitespace
+        }
+    }
+
+    val successors = from.successors()
+    val allPaths = leafPaths(root, from).map { it.reversed() }
+    return allPaths.filter { it.first() !in successors }
+}
 
 private fun elementsFromDepth(psiElement: PsiElement, depth: Int): List<PsiElement> {
     if (depth == 0) {
