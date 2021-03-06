@@ -31,7 +31,7 @@ import java.io.File
 import java.nio.file.Paths
 
 abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
-    private val sourceCodeDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/samples"
+    private val sourceCodeDirectory = "/home/tihonovcore/diploma/kotlin/compiler/testData/codegen/box"
     private val processedDataset = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/processedDataset.txt"
 
     init {
@@ -40,15 +40,21 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
 
     fun doTest() {
         File(sourceCodeDirectory).walkTopDown().forEach { file ->
-            if (file.isDirectory || file.extension != "kt") return@forEach
+            if (file.mustBeSkipped()) return@forEach
 
             val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
             val range2type = checkFile(sourceKtFile, file)
 
             with(File(processedDataset)) {
-                createDatasetSamples(sourceKtFile, range2type, 3, 3, 3)
-                    .joinToString(DatasetSample.SAMPLE_SEPARATOR) { it.toString() }
-                    .also { appendText(it) }
+                try {
+                    createDatasetSamples(sourceKtFile, range2type, 3, 3, 3)
+                        .joinToString(DatasetSample.SAMPLE_SEPARATOR) { it.toString() }
+                        .also { appendText(it) }
+                } catch(e: Exception) {
+                    println(file.absolutePath)
+                    println(e.message)
+                    println()
+                }
             }
         }
     }

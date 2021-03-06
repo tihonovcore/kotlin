@@ -8,6 +8,7 @@ package org.jetbrains.kotlin.diploma
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.psi.KtElement
+import java.io.File
 
 fun PsiElement.renderTree(
     range2type: Map<TextRange, String>,
@@ -44,4 +45,15 @@ fun List<PsiElement>.toDatasetStyle(range2type: Map<TextRange, String>): String 
 
         if (type != null) "$kind # $type $arrow" else "$kind $arrow"
     }.joinToString("")
+}
+
+fun File.mustBeSkipped(): Boolean {
+    if (isDirectory || extension != "kt") return true
+
+    return with(readText()) {
+        contains(Regex("//\\s*?FILE:"))
+                || contains(Regex("//\\s*?WITH_RUNTIME"))
+                || contains(Regex("//\\s*?FILE: .*?\\.java"))
+                || name in listOf("kt30402.kt")
+    }
 }
