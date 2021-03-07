@@ -46,8 +46,8 @@ fun createDatasetSamples(
     .take(countSamples)
     .map { maskedElement ->
         DatasetSample(
-            getAllLeafPaths(root, maskedElement).map { path -> path.toDatasetStyle(range2type) },
-            getRootPath(root, maskedElement).toDatasetStyle(range2type),
+            getAllLeafPaths(root, maskedElement.parent).map { path -> path.toDatasetStyle(range2type) },
+            getRootPath(root, maskedElement.parent).toDatasetStyle(range2type),
             maskedElement.accept(psi2kind, null)
         )
     }
