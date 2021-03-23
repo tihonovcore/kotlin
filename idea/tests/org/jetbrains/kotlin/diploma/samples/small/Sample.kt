@@ -1,12 +1,9 @@
-/*
- * Copyright 2010-2021 JetBrains s.r.o. and Kotlin Programming Language contributors.
- * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
- */
-
-package org.jetbrains.kotlin.diploma.samples.small
-
-fun foo(a: Int) {
-    print(a * 3)
+class A(val x: Int) {
+    fun foo(): Int {
+        print("hello")
+        return x
+    }
 }
 
-val x = "hel${'l'}o"
+val a = A(50)
+val ax = a.foo()

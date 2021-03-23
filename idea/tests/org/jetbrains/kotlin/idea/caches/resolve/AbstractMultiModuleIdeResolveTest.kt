@@ -31,30 +31,34 @@ import java.io.File
 import java.nio.file.Paths
 
 abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
-    private val sourceCodeDirectory = "/home/tihonovcore/diploma/kotlin/compiler/testData/codegen/box"
-    private val processedDataset = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/processedDataset.txt"
 
-    init {
-        File(processedDataset).writeText("")
-    }
+    fun extractPaths(
+        sourceCodeDirectory: String,
+        processedDatasetDirectory: String,
+        useTypes: Boolean = false
+    ) {
+        val output = File("$processedDatasetDirectory/processedDataset.txt").apply {
+            parentFile.mkdirs()
 
-    fun doTest() {
+            if (exists()) writeText("")
+            else createNewFile()
+        }
+
         File(sourceCodeDirectory).walkTopDown().forEach { file ->
             if (file.mustBeSkipped()) return@forEach
 
             val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
             val range2type = checkFile(sourceKtFile, file)
+            if (!useTypes) range2type.clear()
 
-            with(File(processedDataset)) {
-                try {
-                    createDatasetSamples(sourceKtFile, range2type, 3, 3, 3)
-                        .joinToString(DatasetSample.SAMPLE_SEPARATOR) { it.toString() }
-                        .also { appendText(it) }
-                } catch(e: Exception) {
-                    println(file.absolutePath)
-                    println(e.message)
-                    println()
-                }
+            try {
+                createDatasetSamples(sourceKtFile, range2type, 3, 3, 3)
+                    .joinToString("") { it.toString() }
+                    .also { output.appendText(it) }
+            } catch (e: Exception) {
+                println(file.absolutePath)
+                println(e.message)
+                println()
             }
         }
     }
@@ -156,5 +160,10 @@ class PathExtractor : AbstractMultiModuleIdeResolveTest() {
     override fun getTestDataPath(): String = PluginTestCaseBase.getTestDataPathBase()
 
     @TestMetadata("pathExtractor")
-    fun testExtract() = doTest()
+    fun testExtract() {
+        val sourceCodeDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/samples/small"
+        val processedDatasetDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out"
+
+        extractPaths(sourceCodeDirectory, processedDatasetDirectory)
+    }
 }
