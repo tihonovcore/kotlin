@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.idea.caches.resolve
 
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiManager
 import com.intellij.util.io.exists
 import org.jetbrains.kotlin.checkers.BaseDiagnosticsTest
@@ -16,6 +17,7 @@ import org.jetbrains.kotlin.checkers.utils.CheckerTestUtil
 import org.jetbrains.kotlin.checkers.utils.DiagnosticsRenderingConfiguration
 import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.diploma.*
+import org.jetbrains.kotlin.diploma.decoder.Decoder
 import org.jetbrains.kotlin.idea.codeInsight.ReferenceVariantsHelper
 import org.jetbrains.kotlin.idea.core.util.toVirtualFile
 import org.jetbrains.kotlin.idea.project.KotlinMultiplatformAnalysisModeComponent
@@ -61,6 +63,83 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
                 println()
             }
         }
+    }
+
+    //NOTE: если не добалять Whitespace, то `file.text` не будет разделять строки
+    //
+    // Hand-build next sample:
+    //    class A {
+    //        fun foo() {
+    //            while(x != 123) {
+    //                if (x != 123) {
+    //                    123
+    //                    continue
+    //                } else {
+    //                }
+    //            }
+    //        }
+    //    }
+    fun decodeModelResult() = with(Decoder(project)) {
+        fun PsiElement.append(vararg list: PsiElement): PsiElement {
+            list.forEach { add(it) }
+            return this
+        }
+
+        fun PsiElement.appendToBlock(vararg list: PsiElement): PsiElement {
+            val rightBrace = node.lastChildNode
+            list.forEach { node.addChild(it.node, rightBrace) }
+            return this
+        }
+
+        val file =
+            decode("FILE").append(
+                decode("CLASS").also { klass ->
+                    val classBody = klass.children.first()
+                    classBody.appendToBlock(
+                        decode("FUN").also { func ->
+                            func.children.last().appendToBlock(
+                                decode("WHILE").also { loop ->
+                                    val wcond = loop.children.first()
+                                    val block = loop.children.last().children.single()
+
+                                    wcond.add(
+                                        decode("BINARY_EXPRESSION").append(
+                                            decode("REFERENCE_EXPRESSION"),
+                                            decode("OPERATION_REFERENCE"),
+                                            decode("INTEGER_CONSTANT")
+                                        )
+                                    )
+
+                                    block.appendToBlock(
+                                        decode("IF").also { ifStatement ->
+                                            val cond = ifStatement.children[0]
+                                            val then = ifStatement.children[1].children.single()
+                                            println(then::class.java.name)
+
+                                            cond.add(
+                                                decode("BINARY_EXPRESSION").append(
+                                                    decode("REFERENCE_EXPRESSION"),
+                                                    decode("OPERATION_REFERENCE"),
+                                                    decode("INTEGER_CONSTANT")
+                                                )
+                                            )
+
+                                            then.appendToBlock(
+                                                decode("INTEGER_CONSTANT"),
+                                                decode("CONTINUE")
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+
+        file.renderTree(emptyMap())
+        println("\n\n\n")
+        println(file.text)
     }
 
     private fun KtFile.findCorrespondingFileInTestDir(containingRoot: VirtualFile, testDir: File): File {
@@ -166,4 +245,7 @@ class PathExtractor : AbstractMultiModuleIdeResolveTest() {
 
         extractPaths(sourceCodeDirectory, processedDatasetDirectory)
     }
+
+    @TestMetadata("decoder")
+    fun testDecode() = decodeModelResult()
 }

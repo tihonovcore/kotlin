@@ -3,6 +3,12 @@ class A(val x: Int) {
         print("hello")
         return x
     }
+
+    fun bar() {
+        while(x != 4) {
+            if (x == 3) continue
+        }
+    }
 }
 
 val a = A(50)
