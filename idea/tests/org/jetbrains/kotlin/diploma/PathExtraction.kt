@@ -46,13 +46,22 @@ fun createDatasetSamples(
     .take(countSamples)
     .map { maskedElement ->
         DatasetSample(
-            getAllLeafPaths(root, maskedElement.parent).map { path -> path.toDatasetStyle(range2type) },
+            getAllLeafPaths(root, maskedElement.parent, dropSuccessors = true).map { path -> path.toDatasetStyle(range2type) },
             getRootPath(root, maskedElement.parent).toDatasetStyle(range2type),
             maskedElement.accept(psi2kind, null)
         )
     }
 
-private fun getAllLeafPaths(root: PsiElement, from: PsiElement): List<List<PsiElement>> {
+fun extractPaths(
+    root: PsiElement,
+    from: PsiElement,
+    range2type: Map<TextRange, String> = emptyMap()
+) = Pair(
+    getAllLeafPaths(root, from, dropSuccessors = false).map { path -> path.toDatasetStyle(range2type) },
+    getRootPath(root, from).toDatasetStyle(range2type)
+)
+
+private fun getAllLeafPaths(root: PsiElement, from: PsiElement, dropSuccessors: Boolean): List<List<PsiElement>> {
     fun PsiElement.successors(): List<PsiElement> {
         if (children.isEmpty()) return listOf(this)
 
@@ -62,22 +71,27 @@ private fun getAllLeafPaths(root: PsiElement, from: PsiElement): List<List<PsiEl
     }
 
     fun leafPaths(root: PsiElement, from: PsiElement, currentPath: List<PsiElement> = emptyList()): List<List<PsiElement>> {
-        return when {
-            from.children.isNotEmpty() -> {
-                val actualChildren = if (from === root) from.children else from.children + from.parent
+        return when (from) {
+            is KtElement -> {
                 val previousElementInPath = currentPath.lastOrNull()
 
+                val actualChildren = from.children.toMutableList()
+                if (from !== root) actualChildren += from.parent
+                actualChildren -= previousElementInPath
+
+                if (actualChildren.isEmpty() && from !== root) {
+                    return listOf(currentPath + from)
+                }
+
                 actualChildren.fold(mutableListOf(), { paths, element ->
-                    if (element === previousElementInPath) return@fold paths
                     paths.apply { this += leafPaths(root, element, currentPath + from) }
                 })
             }
-            from is KtElement -> listOf(currentPath + from)
             else -> emptyList() //PsiComment, PsiWhitespace
         }
     }
 
-    val successors = from.successors()
+    val successors = if (dropSuccessors) from.successors() else emptyList()
     val allPaths = leafPaths(root, from).map { it.reversed() }
     return allPaths.filter { it.first() !in successors }
 }
