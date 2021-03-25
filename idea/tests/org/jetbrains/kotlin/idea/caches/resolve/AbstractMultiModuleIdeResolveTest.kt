@@ -142,6 +142,15 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
         println(file.text)
     }
 
+    fun runPipeline() {
+        val pipeline = Pipeline(project)
+        val file = pipeline.generateFile()
+
+        file.renderTree(emptyMap())
+        println("\n\n\n")
+        println(file.text) //TODO: в блоки нужно добавлять умнее
+    }
+
     private fun KtFile.findCorrespondingFileInTestDir(containingRoot: VirtualFile, testDir: File): File {
         val tempRootPath = Paths.get(containingRoot.path)
         val tempProjectDirPath = tempRootPath.parent
@@ -248,4 +257,7 @@ class PathExtractor : AbstractMultiModuleIdeResolveTest() {
 
     @TestMetadata("decoder")
     fun testDecode() = decodeModelResult()
+
+    @TestMetadata("pipeline")
+    fun testPipeline() = runPipeline()
 }
