@@ -24,10 +24,6 @@ class DatasetSample(
             appendln(expectation)
         }.toString()
     }
-
-    companion object {
-        const val SAMPLE_SEPARATOR = "@@@"
-    }
 }
 
 /**

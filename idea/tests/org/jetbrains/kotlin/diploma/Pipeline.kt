@@ -6,17 +6,28 @@
 package org.jetbrains.kotlin.diploma
 
 import com.intellij.openapi.project.Project
-import org.jetbrains.kotlin.diploma.decoder.Decoder
+import org.jetbrains.kotlin.psi.KtBlockExpression
+import org.jetbrains.kotlin.psi.KtClassBody
 import org.jetbrains.kotlin.psi.KtElement
 
 class Pipeline(project: Project) {
-    private val decoder = Decoder(project)
+    private val decoder = Kind2Psi(project)
 
     fun generateFile(): KtElement {
         val file = decoder.decode("FILE")
         walk(file, file)
 
         return file
+    }
+
+    private fun KtElement.append(new: KtElement): KtElement {
+        if (this is KtBlockExpression || this is KtClassBody) {
+            val rightBrace = node.lastChildNode
+            node.addChild(new.node, rightBrace)
+            return this.children.last() as KtElement
+        }
+
+        return add(new) as KtElement
     }
 
     private fun walk(file: KtElement, current: KtElement) {
@@ -30,7 +41,7 @@ class Pipeline(project: Project) {
             try {
                 val paths = extractPaths(file, current)
                 val predictedNode = predictNode(paths)
-                val newChild = current.add(decoder.decode(predictedNode)) as KtElement
+                val newChild = current.append(decoder.decode(predictedNode))
 
                 if (!newChild.isTerminal()) {
                     walk(file, newChild)
@@ -47,6 +58,18 @@ class Pipeline(project: Project) {
         return node.elementType.toString() in listOf("INTEGER_CONSTANT", "REFERENCE_EXPRESSION", "OPERATION_REFERENCE", "CONTINUE")
     }
 
+    // Emulates prediction of next sample:
+    //    class A {
+    //        fun foo() {
+    //            while(x != 123) {
+    //                if (x != 123) {
+    //                    123
+    //                    continue
+    //                } else {
+    //                }
+    //            }
+    //        }
+    //    }
     private var step = 0
     private fun predictNode(paths: Pair<List<String>, String>): String {
         //TODO: надо вызывать модельку

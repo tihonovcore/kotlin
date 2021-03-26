@@ -3,13 +3,13 @@
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
-package org.jetbrains.kotlin.diploma.decoder
+package org.jetbrains.kotlin.diploma
 
 import com.intellij.openapi.project.Project
 import org.jetbrains.kotlin.psi.*
 import java.lang.IllegalArgumentException
 
-class Decoder(project: Project) {
+class Kind2Psi(project: Project) {
     private val factory = KtPsiFactory(project)
 
     fun decode(predictedNode: String): KtElement = with(factory) {
@@ -22,9 +22,9 @@ class Decoder(project: Project) {
             "BINARY_EXPRESSION" -> {
                 val file = createFile("fun foo() = x != y")
                 val func = file.children.last()
-                val binop = func.children.last()
-                binop.children.forEach { it.delete() }
-                binop as KtElement
+                val expr = func.children.last()
+                expr.children.forEach { it.delete() }
+                expr as KtElement
             }
             "BINARY_WITH_TYPE" -> TODO()
             "BLOCK" -> TODO()
@@ -100,8 +100,8 @@ class Decoder(project: Project) {
             "OPERATION_REFERENCE" -> {
                 val file = createFile("fun foo() = x != y")
                 val func = file.children.last()
-                val binop = func.children.last()
-                binop.children[1] as KtElement
+                val expr = func.children.last()
+                expr.children[1] as KtElement
             }
             "PACKAGE_DIRECTIVE" -> TODO()
             "PARENTHESIZED" -> TODO()
