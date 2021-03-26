@@ -13,6 +13,8 @@ val psi2kind = object : KtVisitor<String, Void?>() {
 
     override fun visitKtElement(element: KtElement, data: Void?) = element.node.elementType.toString()
 
+    override fun visitKtFile(file: KtFile, data: Void?): String = "FILE"
+
     override fun visitNamedDeclaration(declaration: KtNamedDeclaration, data: Void?): String {
         return super.visitNamedDeclaration(declaration, data) + strategy.process(" " + declaration.name)
     }
