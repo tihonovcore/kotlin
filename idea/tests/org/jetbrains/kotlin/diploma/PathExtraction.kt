@@ -115,3 +115,7 @@ private fun getRootPath(root: PsiElement, maskedElement: PsiElement): List<PsiEl
 
     return path.reversed()
 }
+
+val testOnlyGetAllLeafPaths: (PsiElement, PsiElement, Boolean) -> List<List<PsiElement>> = ::getAllLeafPaths
+val testOnlyElementsFromDepth: (PsiElement, Int) -> List<PsiElement> = ::elementsFromDepth
+val testOnlyGetRootPath: (PsiElement, PsiElement) -> List<PsiElement> = ::getRootPath
