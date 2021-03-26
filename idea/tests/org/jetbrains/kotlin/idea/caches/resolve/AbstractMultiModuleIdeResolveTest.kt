@@ -34,7 +34,7 @@ import java.nio.file.Paths
 
 abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
 
-    fun extractPaths(
+    fun createDataset(
         sourceCodeDirectory: String,
         processedDatasetDirectory: String,
         useTypes: Boolean = false
@@ -247,12 +247,12 @@ abstract class AbstractMultiplatformAnalysisTest : AbstractDiagnosticCodeMetaInf
 class PathExtractor : AbstractMultiModuleIdeResolveTest() {
     override fun getTestDataPath(): String = PluginTestCaseBase.getTestDataPathBase()
 
-    @TestMetadata("pathExtractor")
-    fun testExtract() {
+    @TestMetadata("createDataset")
+    fun testCreateDataset() {
         val sourceCodeDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/samples/small"
         val processedDatasetDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out"
 
-        extractPaths(sourceCodeDirectory, processedDatasetDirectory)
+        createDataset(sourceCodeDirectory, processedDatasetDirectory)
     }
 
     @TestMetadata("decoder")
