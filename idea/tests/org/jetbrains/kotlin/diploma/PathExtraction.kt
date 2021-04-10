@@ -9,22 +9,12 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.psi.KtElement
 
-class DatasetSample(
-    val leafPaths: List<String>,
-    val rootPath: String,
-    val expectation: String
-) {
-    override fun toString(): String {
-        return with(StringBuilder()) {
-            fun <T> appendln(t: T) = append(t).append(System.lineSeparator())
-
-            appendln(leafPaths.size)
-            leafPaths.forEach { appendln(it) }
-            appendln(rootPath)
-            appendln(expectation)
-        }.toString()
-    }
-}
+data class DatasetSample(
+    val leafPaths: List<List<String>>,
+    val rootPath: List<String>,
+    val indexAmongBrothers: Int,
+    val target: String? = null
+)
 
 /**
  * Берем `countSamples` вершин с глубины `depth`. Необходимо предсказать эти
@@ -44,6 +34,7 @@ fun createDatasetSamples(
         DatasetSample(
             getAllLeafPaths(root, maskedElement.parent, dropSuccessors = true).map { path -> path.toDatasetStyle(range2type) },
             getRootPath(root, maskedElement.parent).toDatasetStyle(range2type),
+            maskedElement.parent.children.indexOf(maskedElement),
             maskedElement.kind()
         )
     }
@@ -52,9 +43,10 @@ fun extractPaths(
     root: PsiElement,
     from: PsiElement,
     range2type: Map<TextRange, String> = emptyMap()
-) = Pair(
+): DatasetSample = DatasetSample(
     getAllLeafPaths(root, from, dropSuccessors = false).map { path -> path.toDatasetStyle(range2type) },
-    getRootPath(root, from).toDatasetStyle(range2type)
+    getRootPath(root, from).toDatasetStyle(range2type),
+    from.children.size
 )
 
 private fun getAllLeafPaths(root: PsiElement, from: PsiElement, dropSuccessors: Boolean): List<List<PsiElement>> {

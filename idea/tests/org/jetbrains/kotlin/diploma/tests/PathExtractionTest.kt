@@ -118,28 +118,29 @@ class PathExtractionTest : DiplomaTests() {
         //x as VALUE_ARGUMENT at `print(x)`
         val sample = createDatasetSamples(file, emptyMap(), 13, 1, 1).single()
 
-        val actualLeafPaths = sample.leafPaths
-        val actualRootPath = sample.rootPath
-        val actualTarget = sample.expectation
+        val (actualLeafPaths, actualRootPath, actualIndexAmongBrothers, actualTarget) = sample
 
-        val fromIf = "IF ↓ THEN ↓ BLOCK ↓ CALL_EXPRESSION ↓ VALUE_ARGUMENT_LIST "
+        val fromIf = listOf("IF", "↓", "THEN", "↓", "BLOCK", "↓", "CALL_EXPRESSION", "↓", "VALUE_ARGUMENT_LIST")
+        val fromWhile = listOf("WHILE", "↓", "BODY", "↓", "BLOCK", "↓")
         val expectedLeafPaths = listOf(
-            "REFERENCE_EXPRESSION ↑ CALL_EXPRESSION ↓ VALUE_ARGUMENT_LIST ",
-            "REFERENCE_EXPRESSION ↑ BINARY_EXPRESSION ↑ CONDITION ↑ $fromIf",
-            "OPERATION_REFERENCE ↑ BINARY_EXPRESSION ↑ CONDITION ↑ $fromIf",
-            "INTEGER_CONSTANT ↑ BINARY_EXPRESSION ↑ CONDITION ↑ $fromIf",
-            "REFERENCE_EXPRESSION ↑ BINARY_EXPRESSION ↑ CONDITION ↑ WHILE ↓ BODY ↓ BLOCK ↓ $fromIf",
-            "OPERATION_REFERENCE ↑ BINARY_EXPRESSION ↑ CONDITION ↑ WHILE ↓ BODY ↓ BLOCK ↓ $fromIf",
-            "REFERENCE_EXPRESSION ↑ BINARY_EXPRESSION ↑ CONDITION ↑ WHILE ↓ BODY ↓ BLOCK ↓ $fromIf",
-            "VALUE_PARAMETER_LIST ↑ FUN ↓ BLOCK ↓ WHILE ↓ BODY ↓ BLOCK ↓ $fromIf",
-            "PACKAGE_DIRECTIVE ↑ FILE ↓ CLASS ↓ CLASS_BODY ↓ FUN ↓ BLOCK ↓ WHILE ↓ BODY ↓ BLOCK ↓ $fromIf",
-            "IMPORT_LIST ↑ FILE ↓ CLASS ↓ CLASS_BODY ↓ FUN ↓ BLOCK ↓ WHILE ↓ BODY ↓ BLOCK ↓ $fromIf"
+            listOf("REFERENCE_EXPRESSION", "↑", "CALL_EXPRESSION", "↓", "VALUE_ARGUMENT_LIST"),
+            listOf("REFERENCE_EXPRESSION", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromIf,
+            listOf("OPERATION_REFERENCE", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromIf,
+            listOf("INTEGER_CONSTANT", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromIf,
+            listOf("REFERENCE_EXPRESSION", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromWhile + fromIf,
+            listOf("OPERATION_REFERENCE", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromWhile + fromIf,
+            listOf("REFERENCE_EXPRESSION", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromWhile + fromIf,
+            listOf("VALUE_PARAMETER_LIST", "↑", "FUN", "↓", "BLOCK", "↓") + fromWhile + fromIf,
+            listOf("PACKAGE_DIRECTIVE", "↑", "FILE", "↓", "CLASS", "↓", "CLASS_BODY", "↓", "FUN", "↓", "BLOCK", "↓") + fromWhile + fromIf,
+            listOf("IMPORT_LIST", "↑", "FILE", "↓", "CLASS", "↓", "CLASS_BODY", "↓", "FUN", "↓", "BLOCK", "↓") + fromWhile + fromIf
         )
-        val expectedRootPath = "FILE ↓ CLASS ↓ CLASS_BODY ↓ FUN ↓ BLOCK ↓ WHILE ↓ BODY ↓ BLOCK ↓ $fromIf"
+        val expectedRootPath = listOf("FILE", "↓", "CLASS", "↓", "CLASS_BODY", "↓", "FUN", "↓", "BLOCK", "↓") + fromWhile + fromIf
+        val expectedIndexAmongBrothers = 0 //VALUE_ARGUMENT_LIST.children = { VALUE_ARGUMENT }, we predict VALUE_ARGUMENT
         val expectedTarget = "VALUE_ARGUMENT"
 
         assertEquals(expectedLeafPaths, actualLeafPaths)
         assertEquals(expectedRootPath, actualRootPath)
+        assertEquals(expectedIndexAmongBrothers, actualIndexAmongBrothers)
         assertEquals(expectedTarget, actualTarget)
     }
 
@@ -150,26 +151,29 @@ class PathExtractionTest : DiplomaTests() {
         //x as VALUE_ARGUMENT at `print(x)`
         val from = testOnlyElementsFromDepth(file, 13).single()
 
-        val (actualLeafPaths, actualRootPath) = extractPaths(file, from)
+        val (actualLeafPaths, actualRootPath, actualIndexAmongBrothers, _) = extractPaths(file, from)
 
-        val fromIf = "IF ↓ THEN ↓ BLOCK ↓ CALL_EXPRESSION ↓ VALUE_ARGUMENT_LIST ↓ VALUE_ARGUMENT "
+        val fromIf = listOf("IF", "↓", "THEN", "↓", "BLOCK", "↓", "CALL_EXPRESSION", "↓", "VALUE_ARGUMENT_LIST", "↓", "VALUE_ARGUMENT")
+        val fromWhile = listOf("WHILE", "↓", "BODY", "↓", "BLOCK", "↓")
         val expectedLeafPaths = listOf(
-            "REFERENCE_EXPRESSION ↑ VALUE_ARGUMENT ",
-            "REFERENCE_EXPRESSION ↑ CALL_EXPRESSION ↓ VALUE_ARGUMENT_LIST ↓ VALUE_ARGUMENT ",
-            "REFERENCE_EXPRESSION ↑ BINARY_EXPRESSION ↑ CONDITION ↑ $fromIf",
-            "OPERATION_REFERENCE ↑ BINARY_EXPRESSION ↑ CONDITION ↑ $fromIf",
-            "INTEGER_CONSTANT ↑ BINARY_EXPRESSION ↑ CONDITION ↑ $fromIf",
-            "REFERENCE_EXPRESSION ↑ BINARY_EXPRESSION ↑ CONDITION ↑ WHILE ↓ BODY ↓ BLOCK ↓ $fromIf",
-            "OPERATION_REFERENCE ↑ BINARY_EXPRESSION ↑ CONDITION ↑ WHILE ↓ BODY ↓ BLOCK ↓ $fromIf",
-            "REFERENCE_EXPRESSION ↑ BINARY_EXPRESSION ↑ CONDITION ↑ WHILE ↓ BODY ↓ BLOCK ↓ $fromIf",
-            "VALUE_PARAMETER_LIST ↑ FUN ↓ BLOCK ↓ WHILE ↓ BODY ↓ BLOCK ↓ $fromIf",
-            "PACKAGE_DIRECTIVE ↑ FILE ↓ CLASS ↓ CLASS_BODY ↓ FUN ↓ BLOCK ↓ WHILE ↓ BODY ↓ BLOCK ↓ $fromIf",
-            "IMPORT_LIST ↑ FILE ↓ CLASS ↓ CLASS_BODY ↓ FUN ↓ BLOCK ↓ WHILE ↓ BODY ↓ BLOCK ↓ $fromIf"
+            listOf("REFERENCE_EXPRESSION", "↑", "VALUE_ARGUMENT"),
+            listOf("REFERENCE_EXPRESSION", "↑", "CALL_EXPRESSION", "↓", "VALUE_ARGUMENT_LIST", "↓", "VALUE_ARGUMENT"),
+            listOf("REFERENCE_EXPRESSION", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromIf,
+            listOf("OPERATION_REFERENCE", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromIf,
+            listOf("INTEGER_CONSTANT", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromIf,
+            listOf("REFERENCE_EXPRESSION", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromWhile + fromIf,
+            listOf("OPERATION_REFERENCE", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromWhile + fromIf,
+            listOf("REFERENCE_EXPRESSION", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromWhile + fromIf,
+            listOf("VALUE_PARAMETER_LIST", "↑", "FUN", "↓", "BLOCK", "↓") + fromWhile + fromIf,
+            listOf("PACKAGE_DIRECTIVE", "↑", "FILE", "↓", "CLASS", "↓", "CLASS_BODY", "↓", "FUN", "↓", "BLOCK", "↓") + fromWhile + fromIf,
+            listOf("IMPORT_LIST", "↑", "FILE", "↓", "CLASS", "↓", "CLASS_BODY", "↓", "FUN", "↓", "BLOCK", "↓") + fromWhile + fromIf
         )
-        val expectedRootPath = "FILE ↓ CLASS ↓ CLASS_BODY ↓ FUN ↓ BLOCK ↓ WHILE ↓ BODY ↓ BLOCK ↓ $fromIf"
+        val expectedRootPath = listOf("FILE", "↓", "CLASS", "↓", "CLASS_BODY", "↓", "FUN", "↓", "BLOCK", "↓") + fromWhile + fromIf
+        val expectedIndexAmongBrothers = 1 //VALUE_ARGUMENT.children = { REFERENCE_EXPRESSION, * } and we predict *
 
         assertEquals(expectedLeafPaths, actualLeafPaths)
         assertEquals(expectedRootPath, actualRootPath)
+        assertEquals(expectedIndexAmongBrothers, actualIndexAmongBrothers)
     }
 
     //TODO: add extraction with types test

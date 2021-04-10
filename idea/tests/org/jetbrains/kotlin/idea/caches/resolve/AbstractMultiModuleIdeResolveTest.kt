@@ -37,7 +37,7 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
         processedDatasetDirectory: String,
         useTypes: Boolean = false
     ) {
-        val output = File("$processedDatasetDirectory/processedDataset.txt").apply {
+        val output = File("$processedDatasetDirectory/processedDataset.json").apply {
             parentFile.mkdirs()
 
             if (exists()) writeText("")
@@ -52,9 +52,8 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             if (!useTypes) range2type.clear()
 
             try {
-                createDatasetSamples(sourceKtFile, range2type, 3, 3, 3)
-                    .joinToString("") { it.toString() }
-                    .also { output.appendText(it) }
+                val samples = createDatasetSamples(sourceKtFile, range2type, 3, 3, 3)
+                output.appendText(samples.json() + System.lineSeparator())
             } catch (e: Exception) {
                 println(file.absolutePath)
                 println(e.message)

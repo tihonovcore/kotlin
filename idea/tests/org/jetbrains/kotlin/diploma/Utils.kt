@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.diploma
 
+import com.google.gson.Gson
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.psi.KtElement
@@ -27,24 +28,27 @@ fun PsiElement.renderTree(
     children.forEach { it.renderTree(range2type, tab + 1) }
 }
 
-fun List<PsiElement>.toDatasetStyle(range2type: Map<TextRange, String>): String {
+fun List<PsiElement>.toDatasetStyle(range2type: Map<TextRange, String>): List<String> {
     // NOTE: вроде бы от PSI там только комменты и пробелы,
     // поэтому можно оставить только KtElement
     val ktElements = filterIsInstance(KtElement::class.java)
-    return ktElements.mapIndexed { index, element ->
-        val next = ktElements.getOrNull(index + 1)
-        val arrow = when {
-            next == null -> ""
-            element === next.parent -> "↓ "
-            element.parent === next -> "↑ "
-            else -> throw IllegalStateException("Neighbouring nodes aren't <parent, child> or <child, parent>")
-        }
 
+    val result = mutableListOf<String>()
+    ktElements.forEachIndexed { index, element ->
         val kind = element.kind()
         val type = range2type[element.textRange]
 
-        if (type != null) "$kind # $type $arrow" else "$kind $arrow"
-    }.joinToString("")
+        result += if (type != null) "$kind # $type" else kind
+
+        val next = ktElements.getOrNull(index + 1) ?: return@forEachIndexed
+        result += when {
+            element === next.parent -> "↓"
+            element.parent === next -> "↑"
+            else -> throw IllegalStateException("Neighbouring nodes aren't <parent, child> or <child, parent>")
+        }
+    }
+
+    return result
 }
 
 fun File.mustBeSkipped(): Boolean {
@@ -65,3 +69,5 @@ fun PsiElement.kind(): String {
 
     return "UNKNOWN_KIND: $this"
 }
+
+fun Any.json(): String = Gson().toJson(this)

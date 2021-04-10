@@ -39,8 +39,8 @@ class Pipeline(project: Project) {
 
         while (true) {
             try {
-                val paths = extractPaths(file, current)
-                val predictedNode = predictNode(paths)
+                val jsonDatasetSample = extractPaths(file, current).json()
+                val predictedNode = predictNode(jsonDatasetSample)
                 val newChild = current.append(decoder.decode(predictedNode))
 
                 if (!newChild.isTerminal()) {
@@ -71,7 +71,7 @@ class Pipeline(project: Project) {
     //        }
     //    }
     private var step = 0
-    private fun predictNode(paths: Pair<List<String>, String>): String {
+    private fun predictNode(jsonDatasetSample: String): String {
         //TODO: надо вызывать модельку
         val nodes = listOf(
             "CLASS",
