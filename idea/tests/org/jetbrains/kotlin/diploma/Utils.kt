@@ -15,7 +15,7 @@ fun PsiElement.renderTree(
     tab: Int = 0
 ) {
     if (this is KtElement) {
-        val kind = accept(psi2kind, null)
+        val kind = kind()
         val type = range2type[textRange]
 
         repeat(tab) { print("    ") }
@@ -40,7 +40,7 @@ fun List<PsiElement>.toDatasetStyle(range2type: Map<TextRange, String>): String 
             else -> throw IllegalStateException("Neighbouring nodes aren't <parent, child> or <child, parent>")
         }
 
-        val kind = element.accept(psi2kind, null)
+        val kind = element.kind()
         val type = range2type[element.textRange]
 
         if (type != null) "$kind # $type $arrow" else "$kind $arrow"
@@ -56,4 +56,12 @@ fun File.mustBeSkipped(): Boolean {
                 || contains(Regex("//\\s*?FILE: .*?\\.java"))
                 || name in listOf("kt30402.kt")
     }
+}
+
+fun PsiElement.kind(): String {
+    if (this is KtElement) {
+        return accept(psi2kind, null)
+    }
+
+    return "UNKNOWN_KIND: $this"
 }

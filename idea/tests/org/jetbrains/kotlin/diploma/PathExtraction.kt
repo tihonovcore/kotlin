@@ -44,7 +44,7 @@ fun createDatasetSamples(
         DatasetSample(
             getAllLeafPaths(root, maskedElement.parent, dropSuccessors = true).map { path -> path.toDatasetStyle(range2type) },
             getRootPath(root, maskedElement.parent).toDatasetStyle(range2type),
-            maskedElement.accept(psi2kind, null)
+            maskedElement.kind()
         )
     }
 
@@ -61,9 +61,9 @@ private fun getAllLeafPaths(root: PsiElement, from: PsiElement, dropSuccessors: 
     fun PsiElement.successors(): List<PsiElement> {
         if (children.isEmpty()) return listOf(this)
 
-        return children.fold(mutableListOf(), { successors, element ->
+        return children.fold(mutableListOf()) { successors, element ->
             successors.apply { this += element.successors() }
-        })
+        }
     }
 
     fun leafPaths(root: PsiElement, from: PsiElement, currentPath: List<PsiElement> = emptyList()): List<List<PsiElement>> {
@@ -79,9 +79,9 @@ private fun getAllLeafPaths(root: PsiElement, from: PsiElement, dropSuccessors: 
                     return listOf(currentPath + from)
                 }
 
-                actualChildren.fold(mutableListOf(), { paths, element ->
+                actualChildren.fold(mutableListOf()) { paths, element ->
                     paths.apply { this += leafPaths(root, element, currentPath + from) }
-                })
+                }
             }
             else -> emptyList() //PsiComment, PsiWhitespace
         }
@@ -97,10 +97,9 @@ private fun elementsFromDepth(psiElement: PsiElement, depth: Int): List<PsiEleme
         return listOf(psiElement)
     }
 
-    return psiElement.children.fold(mutableListOf(), { nodes, element ->
-        nodes += elementsFromDepth(element, depth - 1)
-        nodes
-    })
+    return psiElement.children.fold(mutableListOf()) { nodes, element ->
+        nodes.apply { this += elementsFromDepth(element, depth - 1) }
+    }
 }
 
 private fun getRootPath(root: PsiElement, maskedElement: PsiElement): List<PsiElement> {

@@ -13,8 +13,8 @@ abstract class DiplomaTests : AbstractMultiModuleIdeResolveTest() {
     override fun getTestDataPath(): String = PluginTestCaseBase.getTestDataPathBase()
 
     fun KtElement.dfs(): List<KtElement> {
-        return children.filterIsInstance(KtElement::class.java).fold(mutableListOf(this), { acc, child ->
+        return children.filterIsInstance(KtElement::class.java).fold(mutableListOf(this)) { acc, child ->
             acc.apply { addAll(child.dfs()) }
-        })
+        }
     }
 }

@@ -5,7 +5,7 @@
 
 package org.jetbrains.kotlin.diploma.tests
 
-import org.jetbrains.kotlin.diploma.psi2kind
+import org.jetbrains.kotlin.diploma.kind
 import org.jetbrains.kotlin.psi.KtPsiFactory
 import org.jetbrains.kotlin.test.TestMetadata
 
@@ -51,7 +51,7 @@ class Psi2KindTest : DiplomaTests() {
             "VALUE_ARGUMENT", "STRING_TEMPLATE", "LITERAL_STRING_TEMPLATE_ENTRY", "PROPERTY", "DOT_QUALIFIED_EXPRESSION",
             "REFERENCE_EXPRESSION", "CALL_EXPRESSION", "REFERENCE_EXPRESSION", "VALUE_ARGUMENT_LIST"
         )
-        val actual = file.dfs().map { it.accept(psi2kind, null) }
+        val actual = file.dfs().map { it.kind() }
 
         assertEquals(expected, actual)
     }

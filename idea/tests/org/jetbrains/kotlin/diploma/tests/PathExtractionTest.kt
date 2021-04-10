@@ -174,5 +174,5 @@ class PathExtractionTest : DiplomaTests() {
 
     //TODO: add extraction with types test
 
-    private fun List<PsiElement>.kinds(): List<String> = map { (it as KtElement).accept(psi2kind, null) }
+    private fun List<PsiElement>.kinds(): List<String> = map { it.kind() }
 }
