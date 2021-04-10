@@ -71,3 +71,7 @@ fun PsiElement.kind(): String {
 }
 
 fun Any.json(): String = Gson().toJson(this)
+
+fun List<DatasetSample>.skipTooBig(): List<DatasetSample> {
+    return filter { it.leafPaths.size <= 300 }
+}

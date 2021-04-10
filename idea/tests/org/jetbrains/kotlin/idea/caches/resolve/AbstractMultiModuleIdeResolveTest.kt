@@ -5,6 +5,8 @@
 
 package org.jetbrains.kotlin.idea.caches.resolve
 
+import com.google.gson.Gson
+import com.google.gson.JsonParser
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiManager
@@ -34,12 +36,14 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
 
     fun createDataset(
         sourceCodeDirectory: String,
-        processedDatasetDirectory: String,
+        stringDatasetDirectory: String,
+        integerDatasetDirectory: String,
         useTypes: Boolean = false
     ) {
-        val output = File("$processedDatasetDirectory/processedDataset.json").apply {
-            parentFile.mkdirs()
+        File(stringDatasetDirectory).mkdirs()
+        File(integerDatasetDirectory).mkdirs()
 
+        val output = File("$stringDatasetDirectory/dataset.json").apply {
             if (exists()) writeText("")
             else createNewFile()
         }
@@ -52,13 +56,60 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             if (!useTypes) range2type.clear()
 
             try {
-                val samples = createDatasetSamples(sourceKtFile, range2type, 3, 3, 3)
+                val samples = createDatasetSamples(sourceKtFile, range2type, 3, 3, 3).skipTooBig()
                 output.appendText(samples.json() + System.lineSeparator())
             } catch (e: Exception) {
                 println(file.absolutePath)
                 println(e.message)
                 println()
             }
+        }
+
+        string2integer(stringDatasetDirectory, integerDatasetDirectory)
+    }
+
+    private fun string2integer(stringDatasetDirectory: String, integerDatasetDirectory: String) {
+        val vocab = mutableSetOf<String>()
+        val gson = Gson()
+
+        File("$stringDatasetDirectory/dataset.json").forEachLine { line ->
+            JsonParser.parseString(line).asJsonArray.forEach { sample ->
+                gson.fromJson(sample, DatasetSample::class.java).apply {
+                    leafPaths.forEach { path ->
+                        path.forEach { node -> vocab.add(node) }
+                    }
+                    rootPath.forEach { node -> vocab.add(node) }
+                    if (target != null) vocab.add(target)
+                }
+            }
+        }
+
+        val string2integer = mutableMapOf<String, Int>()
+        val integer2string = mutableMapOf<Int, String>()
+        vocab.sorted().forEachIndexed { integer, string ->
+            string2integer[string] = integer
+            integer2string[integer] = string
+        }
+        File("$integerDatasetDirectory/string2integer.json").writeText(string2integer.json())
+        File("$integerDatasetDirectory/integer2string.json").writeText(integer2string.json())
+
+        val integerDataset = File("$integerDatasetDirectory/dataset.json").apply {
+            if (exists()) writeText("")
+            else createNewFile()
+        }
+
+        File("$stringDatasetDirectory/dataset.json").forEachLine { line ->
+            val integerSamples = JsonParser.parseString(line).asJsonArray.map {
+                val sample = gson.fromJson(it, DatasetSample::class.java)
+                IntegerDatasetSample(
+                    sample.leafPaths.map { path -> path.map { node -> string2integer[node]!! } },
+                    sample.rootPath.map { node -> string2integer[node]!! },
+                    sample.indexAmongBrothers,
+                    string2integer[sample.target]
+                )
+            }.json()
+
+            integerDataset.appendText(integerSamples + System.lineSeparator())
         }
     }
 
@@ -169,10 +220,12 @@ class PathExtractor : AbstractMultiModuleIdeResolveTest() {
 
     @TestMetadata("createDataset")
     fun testCreateDataset() {
-        val sourceCodeDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/samples/small"
-        val processedDatasetDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/string"
+//        val sourceCodeDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/samples/small"
+        val sourceCodeDirectory = "/home/tihonovcore/diploma/kotlin/compiler/testData/codegen/box"
+        val stringDatasetDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/string"
+        val integerDatasetDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/integer"
 
-        createDataset(sourceCodeDirectory, processedDatasetDirectory)
+        createDataset(sourceCodeDirectory, stringDatasetDirectory, integerDatasetDirectory)
     }
 
     @TestMetadata("generationPipeline")

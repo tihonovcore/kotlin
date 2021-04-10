@@ -16,6 +16,13 @@ data class DatasetSample(
     val target: String? = null
 )
 
+data class IntegerDatasetSample(
+    val leafPaths: List<List<Int>>,
+    val rootPath: List<Int>,
+    val indexAmongBrothers: Int,
+    val target: Int? = null
+)
+
 /**
  * Берем `countSamples` вершин с глубины `depth`. Необходимо предсказать эти
  * вершины и `nodeForPrediction - 1` их потомков
