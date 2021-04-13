@@ -5,16 +5,24 @@
 
 package org.jetbrains.kotlin.diploma
 
+import com.google.gson.Gson
+import com.google.gson.JsonParser
 import com.intellij.openapi.project.Project
+import com.intellij.util.io.delete
+import com.intellij.util.io.write
 import org.jetbrains.kotlin.psi.KtBlockExpression
 import org.jetbrains.kotlin.psi.KtClassBody
 import org.jetbrains.kotlin.psi.KtElement
+import java.io.BufferedReader
+import java.io.File
+import java.io.InputStreamReader
+import java.nio.file.Files
 
 class Pipeline(project: Project) {
     private val decoder = Kind2Psi(project)
 
     fun generateFile(): KtElement {
-        val file = decoder.decode("FILE")
+        val file = decoder.decode("BOX_TEMPLATE")
         walk(file, file)
 
         return file
@@ -40,7 +48,7 @@ class Pipeline(project: Project) {
         while (true) {
             try {
                 val jsonDatasetSample = extractPaths(file, current).json()
-                val predictedNode = predictNode(jsonDatasetSample)
+                val predictedNode = predictNode(jsonDatasetSample.toIntegerDatasetSample())
                 val newChild = current.append(decoder.decode(predictedNode))
 
                 if (!newChild.isTerminal()) {
@@ -52,54 +60,45 @@ class Pipeline(project: Project) {
         }
     }
 
+    private fun String.toIntegerDatasetSample(): String {
+        val i2s = File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/integer/string2integer.json").readText()
+        val string2integer = JsonParser.parseString(i2s).asJsonObject
+
+        val sample = Gson().fromJson(this, DatasetSample::class.java)
+        return listOf(
+            IntegerDatasetSample(
+                sample.leafPaths.map { path -> path.map { node -> string2integer[node]!!.asInt } },
+                sample.rootPath.map { node -> string2integer[node]!!.asInt },
+                sample.indexAmongBrothers,
+                444 //TODO: unused, but model expects
+            )
+        ).json()
+    }
+
     private fun KtElement.isTerminal(): Boolean {
         //TODO: add other terminals
         //TODO: continue is terminal?? what is `contunue@loop`?
         return node.elementType.toString() in listOf("INTEGER_CONSTANT", "REFERENCE_EXPRESSION", "OPERATION_REFERENCE", "CONTINUE")
     }
 
-    // Emulates prediction of next sample:
-    //    class A {
-    //        fun foo() {
-    //            while(x != 123) {
-    //                if (x != 123) {
-    //                    123
-    //                    continue
-    //                } else {
-    //                }
-    //            }
-    //        }
-    //    }
-    private var step = 0
     private fun predictNode(jsonDatasetSample: String): String {
-        //TODO: надо вызывать модельку
-        val nodes = listOf(
-            "CLASS",
-            "FUN",
-            "@params",
-            "WHILE",
-            "BINARY_EXPRESSION", "REFERENCE_EXPRESSION", "OPERATION_REFERENCE", "INTEGER_CONSTANT", "@bin_expr",
-            "@while_cond",
+        val file = Files.createTempFile("dataset", ".json")
+        file.write(jsonDatasetSample)
 
-            "IF",
-            "BINARY_EXPRESSION", "INTEGER_CONSTANT", "OPERATION_REFERENCE", "REFERENCE_EXPRESSION", "@bin_expr",
-            "@if_cond",
+        // call `predict.py`
+        val predict = "/home/tihonovcore/diploma/model/predict.py"
+        val dataset = file.toAbsolutePath().toString()
 
-            "INTEGER_CONSTANT", "CONTINUE", "@then",
+        val process = Runtime.getRuntime().exec("python3 $predict --json_path=$dataset")
+        process.waitFor()
 
-            "@else",
-            "@while_body",
-            "@fun_body",
-            "@class_body",
-            "@file_body"
-        )
+        // return result
+        val result = BufferedReader(InputStreamReader(process.inputStream)).readText()
+        val error = BufferedReader(InputStreamReader(process.errorStream)).readText()
 
-        val current = nodes[step++]
-        if (current.contains('@')) {
-            throw AfterLast
-        } else {
-            return current
-        }
+        file.delete()
+
+        return result.dropLast(1) // drop `\n`
     }
 
     private object AfterLast : Exception()

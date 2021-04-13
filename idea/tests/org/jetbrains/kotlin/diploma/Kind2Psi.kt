@@ -14,6 +14,8 @@ class Kind2Psi(project: Project) {
 
     fun decode(predictedNode: String): KtElement = with(factory) {
         when (predictedNode) {
+            "BOX_TEMPLATE" -> createFile("fun box() {}")
+
             "ANNOTATED_EXPRESSION" -> TODO()
             "ANNOTATION" -> TODO()
             "ANNOTATION_ENTRY" -> TODO()
@@ -55,7 +57,7 @@ class Kind2Psi(project: Project) {
             "ENUM_ENTRY" -> TODO()
             "ENUM_ENTRY_SUPERCLASS_REFERENCE_EXPRESSION" -> TODO()
             "ESCAPE_STRING_TEMPLATE_ENTRY" -> TODO()
-            "FILE" -> createFile("").apply { children.forEach { it.delete() } }
+            "FILE" -> createFile("") //.apply { children.forEach { it.delete() } }
             "FILE_ANNOTATION_LIST" -> TODO()
             "FINALLY" -> TODO()
             "FLOAT_CONSTANT" -> TODO()
