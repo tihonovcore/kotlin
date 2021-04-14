@@ -24,7 +24,7 @@ class PathExtractionTest : DiplomaTests() {
             |    }
             |}
             |""".trimMargin()
-        )
+        ).addAfterLastEverywhere() as KtElement
     }
 
     @TestMetadata("getRootPath")
@@ -61,9 +61,9 @@ class PathExtractionTest : DiplomaTests() {
         ).map { it.kinds() }
 
         val expectedElements = listOf(
-            listOf("CLASS_BODY"),
-            listOf("FUN"),
-            listOf("VALUE_PARAMETER_LIST", "BLOCK")
+            listOf("AFTER_LAST", "AFTER_LAST", "CLASS_BODY", "AFTER_LAST"),
+            listOf("FUN", "AFTER_LAST"),
+            listOf("VALUE_PARAMETER_LIST", "BLOCK", "AFTER_LAST")
         )
 
         assertEquals(expectedElements, actualElements)
@@ -75,21 +75,9 @@ class PathExtractionTest : DiplomaTests() {
         val ifExpr = file.dfs().find { it is KtIfExpression }!!
         val actualPaths = testOnlyGetAllLeafPaths(file, ifExpr, false).map { it.kinds() }
 
-        val expectedPaths = listOf(
-            listOf("REFERENCE_EXPRESSION", "BINARY_EXPRESSION", "CONDITION", "IF"),
-            listOf("OPERATION_REFERENCE", "BINARY_EXPRESSION", "CONDITION", "IF"),
-            listOf("INTEGER_CONSTANT", "BINARY_EXPRESSION", "CONDITION", "IF"),
-            listOf("REFERENCE_EXPRESSION", "CALL_EXPRESSION", "BLOCK", "THEN", "IF"),
-            listOf("REFERENCE_EXPRESSION", "VALUE_ARGUMENT", "VALUE_ARGUMENT_LIST", "CALL_EXPRESSION", "BLOCK", "THEN", "IF"),
-            listOf("REFERENCE_EXPRESSION", "BINARY_EXPRESSION", "CONDITION", "WHILE", "BODY", "BLOCK", "IF"),
-            listOf("OPERATION_REFERENCE", "BINARY_EXPRESSION", "CONDITION", "WHILE", "BODY", "BLOCK", "IF"),
-            listOf("REFERENCE_EXPRESSION", "BINARY_EXPRESSION", "CONDITION", "WHILE", "BODY", "BLOCK", "IF"),
-            listOf("VALUE_PARAMETER_LIST", "FUN", "BLOCK", "WHILE", "BODY", "BLOCK", "IF"),
-            listOf("PACKAGE_DIRECTIVE", "FILE", "CLASS", "CLASS_BODY", "FUN", "BLOCK", "WHILE", "BODY", "BLOCK", "IF"),
-            listOf("IMPORT_LIST", "FILE", "CLASS", "CLASS_BODY", "FUN", "BLOCK", "WHILE", "BODY", "BLOCK", "IF")
-        )
+        val expectedPaths = load("getAllLeafPaths.txt")
 
-        assertEquals(expectedPaths, actualPaths)
+        assertEquals(expectedPaths.toString(), actualPaths.toString())
     }
 
 
@@ -99,46 +87,26 @@ class PathExtractionTest : DiplomaTests() {
         val ifExpr = file.dfs().find { it is KtIfExpression }!!
         val actualPaths = testOnlyGetAllLeafPaths(file, ifExpr, true).map { it.kinds() }
 
-        val expectedPaths = listOf(
-            listOf("REFERENCE_EXPRESSION", "BINARY_EXPRESSION", "CONDITION", "WHILE", "BODY", "BLOCK", "IF"),
-            listOf("OPERATION_REFERENCE", "BINARY_EXPRESSION", "CONDITION", "WHILE", "BODY", "BLOCK", "IF"),
-            listOf("REFERENCE_EXPRESSION", "BINARY_EXPRESSION", "CONDITION", "WHILE", "BODY", "BLOCK", "IF"),
-            listOf("VALUE_PARAMETER_LIST", "FUN", "BLOCK", "WHILE", "BODY", "BLOCK", "IF"),
-            listOf("PACKAGE_DIRECTIVE", "FILE", "CLASS", "CLASS_BODY", "FUN", "BLOCK", "WHILE", "BODY", "BLOCK", "IF"),
-            listOf("IMPORT_LIST", "FILE", "CLASS", "CLASS_BODY", "FUN", "BLOCK", "WHILE", "BODY", "BLOCK", "IF")
-        )
+        val expectedPaths = load("getAllLeafPathsDropSuccessors.txt")
 
-        assertEquals(expectedPaths, actualPaths)
+        assertEquals(expectedPaths.toString(), actualPaths.toString())
     }
 
     @TestMetadata("createDatasetSamples")
     fun testCreateDatasetSamples() {
         val file = createFile()
 
-        //x as VALUE_ARGUMENT at `print(x)`
-        val sample = createDatasetSamples(file, emptyMap(), 13, 1, 1).single()
+        //AFTER_LAST - single child of REFERENCE_EXPRESSION(x) at `print(x)`
+        val sample = createDatasetSamples(file, emptyMap(), 15, 1, 1).single()
 
         val (actualLeafPaths, actualRootPath, actualIndexAmongBrothers, actualTarget) = sample
 
-        val fromIf = listOf("IF", "↓", "THEN", "↓", "BLOCK", "↓", "CALL_EXPRESSION", "↓", "VALUE_ARGUMENT_LIST")
-        val fromWhile = listOf("WHILE", "↓", "BODY", "↓", "BLOCK", "↓")
-        val expectedLeafPaths = listOf(
-            listOf("REFERENCE_EXPRESSION", "↑", "CALL_EXPRESSION", "↓", "VALUE_ARGUMENT_LIST"),
-            listOf("REFERENCE_EXPRESSION", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromIf,
-            listOf("OPERATION_REFERENCE", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromIf,
-            listOf("INTEGER_CONSTANT", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromIf,
-            listOf("REFERENCE_EXPRESSION", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromWhile + fromIf,
-            listOf("OPERATION_REFERENCE", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromWhile + fromIf,
-            listOf("REFERENCE_EXPRESSION", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromWhile + fromIf,
-            listOf("VALUE_PARAMETER_LIST", "↑", "FUN", "↓", "BLOCK", "↓") + fromWhile + fromIf,
-            listOf("PACKAGE_DIRECTIVE", "↑", "FILE", "↓", "CLASS", "↓", "CLASS_BODY", "↓", "FUN", "↓", "BLOCK", "↓") + fromWhile + fromIf,
-            listOf("IMPORT_LIST", "↑", "FILE", "↓", "CLASS", "↓", "CLASS_BODY", "↓", "FUN", "↓", "BLOCK", "↓") + fromWhile + fromIf
-        )
-        val expectedRootPath = listOf("FILE", "↓", "CLASS", "↓", "CLASS_BODY", "↓", "FUN", "↓", "BLOCK", "↓") + fromWhile + fromIf
-        val expectedIndexAmongBrothers = 0 //VALUE_ARGUMENT_LIST.children = { VALUE_ARGUMENT }, we predict VALUE_ARGUMENT
-        val expectedTarget = "VALUE_ARGUMENT"
+        val expectedLeafPaths = load("createDatasetSamples_leafPaths.txt")
+        val expectedRootPath = load("createDatasetSamples_rootPath.txt").single().split(" ")
+        val expectedIndexAmongBrothers = 0 //REFERENCE_EXPRESSION.children = { AFTER_LAST }, we predict AFTER_LAST
+        val expectedTarget = "AFTER_LAST"
 
-        assertEquals(expectedLeafPaths, actualLeafPaths)
+        assertEquals(expectedLeafPaths.toString(), actualLeafPaths.toString())
         assertEquals(expectedRootPath, actualRootPath)
         assertEquals(expectedIndexAmongBrothers, actualIndexAmongBrothers)
         assertEquals(expectedTarget, actualTarget)
@@ -148,30 +116,24 @@ class PathExtractionTest : DiplomaTests() {
     fun testExtractPaths() {
         val file = createFile()
 
-        //x as VALUE_ARGUMENT at `print(x)`
-        val from = testOnlyElementsFromDepth(file, 13).single()
+        //VALUE_ARGUMENT(x) at `print(x)`
+        val from = testOnlyElementsFromDepth(file, 13).filterIsInstance(KtValueArgument::class.java).single()
 
         val (actualLeafPaths, actualRootPath, actualIndexAmongBrothers, _) = extractPaths(file, from)
 
-        val fromIf = listOf("IF", "↓", "THEN", "↓", "BLOCK", "↓", "CALL_EXPRESSION", "↓", "VALUE_ARGUMENT_LIST", "↓", "VALUE_ARGUMENT")
-        val fromWhile = listOf("WHILE", "↓", "BODY", "↓", "BLOCK", "↓")
-        val expectedLeafPaths = listOf(
-            listOf("REFERENCE_EXPRESSION", "↑", "VALUE_ARGUMENT"),
-            listOf("REFERENCE_EXPRESSION", "↑", "CALL_EXPRESSION", "↓", "VALUE_ARGUMENT_LIST", "↓", "VALUE_ARGUMENT"),
-            listOf("REFERENCE_EXPRESSION", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromIf,
-            listOf("OPERATION_REFERENCE", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromIf,
-            listOf("INTEGER_CONSTANT", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromIf,
-            listOf("REFERENCE_EXPRESSION", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromWhile + fromIf,
-            listOf("OPERATION_REFERENCE", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromWhile + fromIf,
-            listOf("REFERENCE_EXPRESSION", "↑", "BINARY_EXPRESSION", "↑", "CONDITION", "↑") + fromWhile + fromIf,
-            listOf("VALUE_PARAMETER_LIST", "↑", "FUN", "↓", "BLOCK", "↓") + fromWhile + fromIf,
-            listOf("PACKAGE_DIRECTIVE", "↑", "FILE", "↓", "CLASS", "↓", "CLASS_BODY", "↓", "FUN", "↓", "BLOCK", "↓") + fromWhile + fromIf,
-            listOf("IMPORT_LIST", "↑", "FILE", "↓", "CLASS", "↓", "CLASS_BODY", "↓", "FUN", "↓", "BLOCK", "↓") + fromWhile + fromIf
-        )
-        val expectedRootPath = listOf("FILE", "↓", "CLASS", "↓", "CLASS_BODY", "↓", "FUN", "↓", "BLOCK", "↓") + fromWhile + fromIf
-        val expectedIndexAmongBrothers = 1 //VALUE_ARGUMENT.children = { REFERENCE_EXPRESSION, * } and we predict *
+        val expectedLeafPaths = load("extractPaths_leafPaths.txt")
+        val expectedRootPath = load("extractPaths_rootPath.txt").single().split(" ")
 
-        assertEquals(expectedLeafPaths, actualLeafPaths)
+        // Create sample for prediction *
+        //
+        //  from:      VALUE_ARGUMENT
+        //     0:          REFERENCE_EXPRESSION
+        //                     AFTER_LAST
+        //     1:          AFTER_LAST
+        //     2:          *
+        val expectedIndexAmongBrothers = 2
+
+        assertEquals(expectedLeafPaths.toString(), actualLeafPaths.toString())
         assertEquals(expectedRootPath, actualRootPath)
         assertEquals(expectedIndexAmongBrothers, actualIndexAmongBrothers)
     }
