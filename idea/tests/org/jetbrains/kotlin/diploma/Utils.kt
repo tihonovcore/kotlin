@@ -8,6 +8,8 @@ package org.jetbrains.kotlin.diploma
 import com.google.gson.Gson
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
+import org.jetbrains.kotlin.psi.KtBlockExpression
+import org.jetbrains.kotlin.psi.KtClassBody
 import org.jetbrains.kotlin.psi.KtElement
 import java.io.File
 
@@ -63,6 +65,10 @@ fun File.mustBeSkipped(): Boolean {
 }
 
 fun PsiElement.kind(): String {
+    if (this.isAfterLast()) {
+        return AFTER_LAST_KIND
+    }
+
     if (this is KtElement) {
         return accept(psi2kind, null)
     }
@@ -74,4 +80,14 @@ fun Any.json(): String = Gson().toJson(this)
 
 fun List<DatasetSample>.skipTooBig(): List<DatasetSample> {
     return filter { it.leafPaths.size <= 300 }
+}
+
+fun KtElement.append(new: KtElement): KtElement {
+    if (this is KtBlockExpression || this is KtClassBody) {
+        val rightBrace = node.lastChildNode
+        node.addChild(new.node, rightBrace)
+        return this.children.last() as KtElement
+    }
+
+    return add(new) as KtElement
 }

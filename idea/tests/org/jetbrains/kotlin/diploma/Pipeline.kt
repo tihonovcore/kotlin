@@ -10,8 +10,6 @@ import com.google.gson.JsonParser
 import com.intellij.openapi.project.Project
 import com.intellij.util.io.delete
 import com.intellij.util.io.write
-import org.jetbrains.kotlin.psi.KtBlockExpression
-import org.jetbrains.kotlin.psi.KtClassBody
 import org.jetbrains.kotlin.psi.KtElement
 import java.io.BufferedReader
 import java.io.File
@@ -22,20 +20,12 @@ class Pipeline(project: Project) {
     private val decoder = Kind2Psi(project)
 
     fun generateFile(): KtElement {
+        `clear instances for new file`()
+
         val file = decoder.decode("BOX_TEMPLATE")
         walk(file, file)
 
         return file
-    }
-
-    private fun KtElement.append(new: KtElement): KtElement {
-        if (this is KtBlockExpression || this is KtClassBody) {
-            val rightBrace = node.lastChildNode
-            node.addChild(new.node, rightBrace)
-            return this.children.last() as KtElement
-        }
-
-        return add(new) as KtElement
     }
 
     private fun walk(file: KtElement, current: KtElement) {
@@ -46,15 +36,17 @@ class Pipeline(project: Project) {
         }
 
         while (true) {
-            try {
-                val jsonDatasetSample = extractPaths(file, current).json()
-                val predictedNode = predictNode(jsonDatasetSample.toIntegerDatasetSample())
-                val newChild = current.append(decoder.decode(predictedNode))
+            val jsonDatasetSample = extractPaths(file, current).json()
+            val predictedNode = predictNode(jsonDatasetSample.toIntegerDatasetSample())
+            val newChild = current.append(decoder.decode(predictedNode))
 
-                if (!newChild.isTerminal()) {
-                    walk(file, newChild)
-                }
-            } catch (e: AfterLast) {
+            `update instances if newChild is AfterLast`(predictedNode, newChild)
+
+            if (!newChild.isTerminal()) {
+                walk(file, newChild)
+            }
+
+            if (newChild.isAfterLast()) {
                 break
             }
         }
@@ -78,7 +70,7 @@ class Pipeline(project: Project) {
     private fun KtElement.isTerminal(): Boolean {
         //TODO: add other terminals
         //TODO: continue is terminal?? what is `contunue@loop`?
-        return node.elementType.toString() in listOf("INTEGER_CONSTANT", "REFERENCE_EXPRESSION", "OPERATION_REFERENCE", "CONTINUE")
+        return kind() in listOf("INTEGER_CONSTANT", "REFERENCE_EXPRESSION", "OPERATION_REFERENCE", "CONTINUE", AFTER_LAST_KIND)
     }
 
     private fun predictNode(jsonDatasetSample: String): String {

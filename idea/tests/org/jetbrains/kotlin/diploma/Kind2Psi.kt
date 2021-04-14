@@ -9,11 +9,12 @@ import com.intellij.openapi.project.Project
 import org.jetbrains.kotlin.psi.*
 import java.lang.IllegalArgumentException
 
-class Kind2Psi(project: Project) {
+class Kind2Psi(private val project: Project) {
     private val factory = KtPsiFactory(project)
 
     fun decode(predictedNode: String): KtElement = with(factory) {
         when (predictedNode) {
+            AFTER_LAST_KIND -> newAfterLast(project)
             "BOX_TEMPLATE" -> createFile("fun box() {}")
 
             "ANNOTATED_EXPRESSION" -> TODO()
