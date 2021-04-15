@@ -38,10 +38,11 @@ fun createDatasetSamples(
     .filterIsInstance(KtElement::class.java)
     .take(countSamples)
     .map { maskedElement ->
+        val targetIndex = maskedElement.parent.children.indexOf(maskedElement)
         DatasetSample(
-            getAllLeafPaths(root, maskedElement.parent, dropSuccessors = true).map { path -> path.toDatasetStyle(range2type) },
+            getAllLeafPaths(root, maskedElement.parent, targetIndex).map { path -> path.toDatasetStyle(range2type) },
             getRootPath(root, maskedElement.parent).toDatasetStyle(range2type),
-            maskedElement.parent.children.indexOf(maskedElement),
+            targetIndex,
             maskedElement.kind()
         )
     }
@@ -50,13 +51,16 @@ fun extractPaths(
     root: PsiElement,
     from: PsiElement,
     range2type: Map<TextRange, String> = emptyMap()
-): DatasetSample = DatasetSample(
-    getAllLeafPaths(root, from, dropSuccessors = false).map { path -> path.toDatasetStyle(range2type) },
-    getRootPath(root, from).toDatasetStyle(range2type),
-    from.children.size
-)
+): DatasetSample {
+    val targetIndex = from.children.size
+    return DatasetSample(
+        getAllLeafPaths(root, from, targetIndex).map { path -> path.toDatasetStyle(range2type) },
+        getRootPath(root, from).toDatasetStyle(range2type),
+        targetIndex
+    )
+}
 
-private fun getAllLeafPaths(root: PsiElement, from: PsiElement, dropSuccessors: Boolean): List<List<PsiElement>> {
+private fun getAllLeafPaths(root: PsiElement, from: PsiElement, targetIndex: Int): List<List<PsiElement>> {
     fun PsiElement.successors(): List<PsiElement> {
         if (children.isEmpty()) return listOf(this)
 
@@ -86,7 +90,7 @@ private fun getAllLeafPaths(root: PsiElement, from: PsiElement, dropSuccessors: 
         }
     }
 
-    val successors = if (dropSuccessors) from.successors() else emptyList()
+    val successors = from.children.toList().drop(targetIndex).flatMap { it.successors() }
     val allPaths = leafPaths(root, from).map { it.reversed() }
     return allPaths.filter { it.first() !in successors }
 }
@@ -110,6 +114,6 @@ private fun getRootPath(root: PsiElement, maskedElement: PsiElement): List<PsiEl
     return path.reversed()
 }
 
-val testOnlyGetAllLeafPaths: (PsiElement, PsiElement, Boolean) -> List<List<PsiElement>> = ::getAllLeafPaths
+val testOnlyGetAllLeafPaths: (PsiElement, PsiElement, Int) -> List<List<PsiElement>> = ::getAllLeafPaths
 val testOnlyElementsFromDepth: (PsiElement, Int) -> List<PsiElement> = ::elementsFromDepth
 val testOnlyGetRootPath: (PsiElement, PsiElement) -> List<PsiElement> = ::getRootPath

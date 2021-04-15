@@ -73,21 +73,9 @@ class PathExtractionTest : DiplomaTests() {
     fun testGetAllLeafPaths() {
         val file = createFile()
         val ifExpr = file.dfs().find { it is KtIfExpression }!!
-        val actualPaths = testOnlyGetAllLeafPaths(file, ifExpr, false).map { it.kinds() }
+        val actualPaths = testOnlyGetAllLeafPaths(file, ifExpr, 1).map { it.kinds() }
 
         val expectedPaths = load("getAllLeafPaths.txt")
-
-        assertEquals(expectedPaths.toString(), actualPaths.toString())
-    }
-
-
-    @TestMetadata("getAllLeafPathsDropSuccessors")
-    fun testGetAllLeafPathsDropSuccessors() {
-        val file = createFile()
-        val ifExpr = file.dfs().find { it is KtIfExpression }!!
-        val actualPaths = testOnlyGetAllLeafPaths(file, ifExpr, true).map { it.kinds() }
-
-        val expectedPaths = load("getAllLeafPathsDropSuccessors.txt")
 
         assertEquals(expectedPaths.toString(), actualPaths.toString())
     }
