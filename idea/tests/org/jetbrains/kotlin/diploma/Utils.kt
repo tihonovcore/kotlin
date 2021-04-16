@@ -44,6 +44,8 @@ fun List<PsiElement>.toDatasetStyle(range2type: Map<TextRange, String>): List<St
 
         val next = ktElements.getOrNull(index + 1) ?: return@forEachIndexed
         result += when {
+            next === AfterLast -> "↓" //AfterLast has not children => we come from parent
+            element === AfterLast -> "↑" //AfterLast has not children => we go to parent
             element === next.parent -> "↓"
             element.parent === next -> "↑"
             else -> throw IllegalStateException("Neighbouring nodes aren't <parent, child> or <child, parent>")
@@ -65,6 +67,10 @@ fun File.mustBeSkipped(): Boolean {
 }
 
 fun PsiElement.kind(): String {
+    if (this === AfterLast) {
+        return AFTER_LAST_KIND
+    }
+
     if (this.isAfterLast()) {
         return AFTER_LAST_KIND
     }

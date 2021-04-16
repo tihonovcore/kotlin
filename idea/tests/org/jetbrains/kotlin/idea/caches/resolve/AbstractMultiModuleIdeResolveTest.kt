@@ -7,6 +7,8 @@ package org.jetbrains.kotlin.idea.caches.resolve
 
 import com.google.gson.Gson
 import com.google.gson.JsonParser
+import com.intellij.openapi.command.CommandProcessor
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiManager
@@ -27,10 +29,12 @@ import org.jetbrains.kotlin.idea.resolve.getLanguageVersionSettings
 import org.jetbrains.kotlin.idea.stubs.AbstractMultiModuleTest
 import org.jetbrains.kotlin.idea.test.PluginTestCaseBase
 import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.KtPsiFactory
 import org.jetbrains.kotlin.test.KotlinTestUtils
 import org.jetbrains.kotlin.test.TestMetadata
 import java.io.File
 import java.nio.file.Paths
+import java.util.NoSuchElementException
 
 abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
 
@@ -50,17 +54,24 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
 
         File(sourceCodeDirectory).walkTopDown().forEach { file ->
             if (file.mustBeSkipped()) return@forEach
+            println(file.path)
 
             val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
             val range2type = checkFile(sourceKtFile, file)
             if (!useTypes) range2type.clear()
 
-            `clear instances for new file`()
-            sourceKtFile.addAfterLastEverywhere()
+//            `clear instances for new file`()
+//            try {
+//                WriteCommandAction.runWriteCommandAction(project) { sourceKtFile.addAfterLastEverywhere() }
+           // } catch (e: NoSuchElementException) {
+//                println("!!!${file.path}")
+//                return@forEach
+//            }
+//            sourceKtFile.addAfterLastEverywhere()
 
             try {
-                val samples = createDatasetSamples(sourceKtFile, range2type, 3, 3, 3).skipTooBig()
-                output.appendText(samples.json() + System.lineSeparator())
+                val samples = new_createDatasetSamples(sourceKtFile, range2type, 3, 3)
+                output.appendText(samples/*.skipTooBig()*/.json() + System.lineSeparator())
             } catch (e: Exception) {
                 println(file.absolutePath)
                 println(e.message)
