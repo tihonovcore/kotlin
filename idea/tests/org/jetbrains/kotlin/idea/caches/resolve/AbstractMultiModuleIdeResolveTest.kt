@@ -60,18 +60,9 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             val range2type = checkFile(sourceKtFile, file)
             if (!useTypes) range2type.clear()
 
-//            `clear instances for new file`()
-//            try {
-//                WriteCommandAction.runWriteCommandAction(project) { sourceKtFile.addAfterLastEverywhere() }
-           // } catch (e: NoSuchElementException) {
-//                println("!!!${file.path}")
-//                return@forEach
-//            }
-//            sourceKtFile.addAfterLastEverywhere()
-
             try {
-                val samples = new_createDatasetSamples(sourceKtFile, range2type, 3, 3)
-                output.appendText(samples/*.skipTooBig()*/.json() + System.lineSeparator())
+                val samples = new_createDatasetSamples(sourceKtFile, range2type, 3, 3).skipTooBig()
+                output.appendText(samples.json() + System.lineSeparator())
             } catch (e: Exception) {
                 println(file.absolutePath)
                 println(e.message)

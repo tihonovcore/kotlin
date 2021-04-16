@@ -8,6 +8,7 @@ package org.jetbrains.kotlin.diploma
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.psi.KtElement
+import kotlin.random.Random
 
 private class AstWithAfterLast(
     val original: PsiElement,
@@ -19,13 +20,12 @@ fun new_createDatasetSamples(
     root: PsiElement,
     range2type: Map<TextRange, String>,
     depth: Int,
-    countSamples: Int
+    samplesCount: Int
 ): List<DatasetSample> {
     return buildTree(root, null)
         .addAfterLast()
         .elementsFromDepth(depth)
-        .shuffled()
-        .take(countSamples)
+        .smartlyTake(samplesCount)
         .map { targetElement ->
             val targetIndex = targetElement.parent!!.children.indexOf(targetElement)
 
@@ -58,6 +58,24 @@ private fun AstWithAfterLast.elementsFromDepth(depth: Int): List<AstWithAfterLas
     return children.fold(mutableListOf()) { nodes, element ->
         nodes.apply { this += element.elementsFromDepth(depth - 1) }
     }
+}
+
+private fun List<AstWithAfterLast>.smartlyTake(samplesCount: Int): List<AstWithAfterLast> {
+    val notAfterLast = filterNot { it.original === AfterLast }.shuffled().toMutableList()
+    val afterLast = filter { it.original === AfterLast }.shuffled().toMutableList()
+
+    val rankedMerge = mutableListOf<AstWithAfterLast>()
+    while (afterLast.isNotEmpty() || notAfterLast.isNotEmpty()) {
+        if (afterLast.isEmpty() || notAfterLast.isEmpty()) {
+            rankedMerge += notAfterLast
+            rankedMerge += afterLast
+            break
+        }
+
+        rankedMerge += if (Random.nextDouble() < 0.95) notAfterLast.removeLast() else afterLast.removeLast()
+    }
+
+    return rankedMerge.take(samplesCount)
 }
 
 private fun getLeafPaths(from: AstWithAfterLast, targetIndex: Int): List<List<AstWithAfterLast>> {
