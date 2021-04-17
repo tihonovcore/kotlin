@@ -5,7 +5,6 @@
 
 package org.jetbrains.kotlin.diploma.tests
 
-import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.diploma.*
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.test.TestMetadata
@@ -24,7 +23,7 @@ class PathExtractionTest : DiplomaTests() {
             |    }
             |}
             |""".trimMargin()
-        ).addAfterLastEverywhere() as KtElement
+        )
     }
 
     @TestMetadata("getRootPath")
@@ -43,8 +42,9 @@ class PathExtractionTest : DiplomaTests() {
             loop + call + listOf("VALUE_ARGUMENT_LIST", "VALUE_ARGUMENT", "REFERENCE_EXPRESSION") //x
         )
 
+        val wrappedFile = testOnlyBuildTree(file, null)
         val actualPaths = ids
-            .map { testOnlyGetRootPath(file, it) }
+            .map { testOnlyGetRootPath(wrappedFile.testOnlyFindNode(it)!!) }
             .map { it.kinds() }
             .filter { it.last() == "REFERENCE_EXPRESSION" }
 
@@ -53,44 +53,46 @@ class PathExtractionTest : DiplomaTests() {
 
     @TestMetadata("elementsFromDepth")
     fun testElementsFromDepth() {
-        val file = createFile()
+        val file = testOnlyBuildTree(createFile(), null)
         val actualElements = listOf(
-            testOnlyElementsFromDepth(file, 2),
-            testOnlyElementsFromDepth(file, 3),
-            testOnlyElementsFromDepth(file, 4),
+            file.testOnlyElementsFromDepth(2),
+            file.testOnlyElementsFromDepth(3),
+            file.testOnlyElementsFromDepth(4),
         ).map { it.kinds() }
 
         val expectedElements = listOf(
-            listOf("AFTER_LAST", "AFTER_LAST", "CLASS_BODY", "AFTER_LAST"),
-            listOf("FUN", "AFTER_LAST"),
-            listOf("VALUE_PARAMETER_LIST", "BLOCK", "AFTER_LAST")
+            listOf("CLASS_BODY"),
+            listOf("FUN"),
+            listOf("VALUE_PARAMETER_LIST", "BLOCK")
         )
 
         assertEquals(expectedElements, actualElements)
     }
 
-    @TestMetadata("getAllLeafPaths")
+    @TestMetadata("getLeafPaths")
     fun testGetAllLeafPaths() {
         val file = createFile()
         val ifExpr = file.dfs().find { it is KtIfExpression }!!
-        val actualPaths = testOnlyGetAllLeafPaths(file, ifExpr, 1).map { it.kinds() }
 
-        val expectedPaths = load("getAllLeafPaths.txt")
+        val wrappedFile = testOnlyBuildTree(file, null)
+        val actualPaths = testOnlyGetLeafPaths(wrappedFile.testOnlyFindNode(ifExpr)!!, 1).map { it.kinds() }
+
+        val expectedPaths = load("getLeafPaths.txt")
 
         assertEquals(expectedPaths.toString(), actualPaths.toString())
     }
 
-    @TestMetadata("createDatasetSamples")
+    @TestMetadata("createSamplesForDataset")
     fun testCreateDatasetSamples() {
         val file = createFile()
 
         //AFTER_LAST - single child of REFERENCE_EXPRESSION(x) at `print(x)`
-        val sample = createDatasetSamples(file, emptyMap(), 15, 1, 1).single()
+        val sample = createSamplesForDataset(file, emptyMap(), 15, 1).single()
 
         val (actualLeafPaths, actualRootPath, actualIndexAmongBrothers, actualTarget) = sample
 
-        val expectedLeafPaths = load("createDatasetSamples_leafPaths.txt")
-        val expectedRootPath = load("createDatasetSamples_rootPath.txt").single().split(" ")
+        val expectedLeafPaths = load("createSamplesForDataset_leafPaths.txt")
+        val expectedRootPath = load("createSamplesForDataset_rootPath.txt").single().split(" ")
         val expectedIndexAmongBrothers = 0 //REFERENCE_EXPRESSION.children = { AFTER_LAST }, we predict AFTER_LAST
         val expectedTarget = "AFTER_LAST"
 
@@ -100,26 +102,33 @@ class PathExtractionTest : DiplomaTests() {
         assertEquals(expectedTarget, actualTarget)
     }
 
-    @TestMetadata("extractPaths")
+    @TestMetadata("createSampleForPredict")
     fun testExtractPaths() {
         val file = createFile()
 
         //VALUE_ARGUMENT(x) at `print(x)`
-        val from = testOnlyElementsFromDepth(file, 13).filterIsInstance(KtValueArgument::class.java).single()
+        val from = file.dfs().single { it is KtValueArgument }
 
-        val (actualLeafPaths, actualRootPath, actualIndexAmongBrothers, _) = extractPaths(file, from)
+        val path = mutableListOf<KtElement>()
+        var current = from
+        while (current !== file) {
+            path += current
+            current = current.parent as KtElement
+        }
+        path += file
 
-        val expectedLeafPaths = load("extractPaths_leafPaths.txt")
-        val expectedRootPath = load("extractPaths_rootPath.txt").single().split(" ")
+        val (actualLeafPaths, actualRootPath, actualIndexAmongBrothers, _) = createSampleForPredict(file, from, path)
+
+        val expectedLeafPaths = load("createSampleForPredict_leafPaths.txt")
+        val expectedRootPath = load("createSampleForPredict_rootPath.txt").single().split(" ")
 
         // Create sample for prediction *
         //
         //  from:      VALUE_ARGUMENT
         //     0:          REFERENCE_EXPRESSION
         //                     AFTER_LAST
-        //     1:          AFTER_LAST
-        //     2:          *
-        val expectedIndexAmongBrothers = 2
+        //     1:          *
+        val expectedIndexAmongBrothers = 1
 
         assertEquals(expectedLeafPaths.toString(), actualLeafPaths.toString())
         assertEquals(expectedRootPath, actualRootPath)
@@ -128,5 +137,5 @@ class PathExtractionTest : DiplomaTests() {
 
     //TODO: add extraction with types test
 
-    private fun List<PsiElement>.kinds(): List<String> = map { it.kind() }
+    private fun List<AstWithAfterLast>.kinds(): List<String> = map { it.original.kind() }
 }

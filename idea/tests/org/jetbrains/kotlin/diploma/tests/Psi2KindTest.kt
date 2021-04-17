@@ -5,16 +5,15 @@
 
 package org.jetbrains.kotlin.diploma.tests
 
-import org.jetbrains.kotlin.diploma.addAfterLastEverywhere
+import org.jetbrains.kotlin.diploma.AfterLast
 import org.jetbrains.kotlin.diploma.kind
 import org.jetbrains.kotlin.diploma.renderTree
-import org.jetbrains.kotlin.psi.KtElement
 import org.jetbrains.kotlin.psi.KtPsiFactory
 import org.jetbrains.kotlin.test.TestMetadata
 
 class Psi2KindTest : DiplomaTests() {
 
-    @TestMetadata("getKinds")
+    @TestMetadata("getKind")
     fun testGetKind() {
         val file = KtPsiFactory(project).createFile(
             """
@@ -38,12 +37,18 @@ class Psi2KindTest : DiplomaTests() {
             |val x = A("John")
             |val y = x.bar()
             |""".trimMargin()
-        ).addAfterLastEverywhere() as KtElement
-
-        file.renderTree(emptyMap())
+        )
 
         val expected = load("getKind.txt").map { line -> line.dropWhile { it == ' ' } }
         val actual = file.dfs().map { it.kind() }
+
+        assertEquals(expected, actual)
+    }
+
+    @TestMetadata("getKindWithAfterLast")
+    fun testAfterLast() {
+        val expected = "AFTER_LAST"
+        val actual = AfterLast.kind()
 
         assertEquals(expected, actual)
     }

@@ -8,60 +8,122 @@ package org.jetbrains.kotlin.diploma
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.psi.KtElement
+import kotlin.random.Random
 
-data class DatasetSample(
-    val leafPaths: List<List<String>>,
-    val rootPath: List<String>,
-    val indexAmongBrothers: Int,
-    val target: String? = null
-)
+class AstWithAfterLast(
+    val original: PsiElement,
+    val parent: AstWithAfterLast?,
+    val children: MutableList<AstWithAfterLast> = mutableListOf()
+) {
+    fun renderTree(tab: Int = 0) {
+        if (original is KtElement) {
+            val kind = original.kind()
 
-data class IntegerDatasetSample(
-    val leafPaths: List<List<Int>>,
-    val rootPath: List<Int>,
-    val indexAmongBrothers: Int,
-    val target: Int? = null
-)
+            repeat(tab) { print("    ") }
+            println(kind)
+        }
 
-/**
- * Берем `countSamples` вершин с глубины `depth`. Необходимо предсказать эти
- * вершины и `nodeForPrediction - 1` их потомков
- */
-fun createDatasetSamples(
+        children.forEach { it.renderTree(tab + 1) }
+    }
+
+}
+
+fun createSamplesForDataset(
     root: PsiElement,
     range2type: Map<TextRange, String>,
     depth: Int,
-    countSamples: Int,
-    nodeForPrediction: Int // TODO: support several prediction
-): List<DatasetSample> = elementsFromDepth(root, depth)
-    .shuffled()
-    .filterIsInstance(KtElement::class.java)
-    .take(countSamples)
-    .map { maskedElement ->
-        val targetIndex = maskedElement.parent.children.indexOf(maskedElement)
-        DatasetSample(
-            getAllLeafPaths(root, maskedElement.parent, targetIndex).map { path -> path.toDatasetStyle(range2type) },
-            getRootPath(root, maskedElement.parent).toDatasetStyle(range2type),
-            targetIndex,
-            maskedElement.kind()
-        )
-    }
+    samplesCount: Int
+): List<StringDatasetSample> {
+    return buildTree(root, null)
+        .addAfterLast()
+        .elementsFromDepth(depth)
+        .smartlyTake(samplesCount)
+        .map { targetElement ->
+            val targetIndex = targetElement.parent!!.children.indexOf(targetElement)
 
-fun extractPaths(
-    root: PsiElement,
-    from: PsiElement,
-    range2type: Map<TextRange, String> = emptyMap()
-): DatasetSample {
-    val targetIndex = from.children.size
-    return DatasetSample(
-        getAllLeafPaths(root, from, targetIndex).map { path -> path.toDatasetStyle(range2type) },
-        getRootPath(root, from).toDatasetStyle(range2type),
-        targetIndex
-    )
+            StringDatasetSample(
+                getLeafPaths(targetElement.parent, targetIndex).unbox().map { path -> path.toDatasetStyle(range2type) },
+                getRootPath(targetElement.parent).unbox().toDatasetStyle(range2type),
+                targetIndex,
+                targetElement.original.kind()
+            )
+        }
 }
 
-private fun getAllLeafPaths(root: PsiElement, from: PsiElement, targetIndex: Int): List<List<PsiElement>> {
-    fun PsiElement.successors(): List<PsiElement> {
+fun createSampleForPredict(
+    root: PsiElement,
+    from: PsiElement,
+    notFinished: List<KtElement>,
+    range2type: Map<TextRange, String> = emptyMap()
+): StringDatasetSample {
+    val targetIndex = from.children.size
+
+    return buildTree(root, null)
+        .addAfterLast(notFinished)
+        .also { println(from.kind()); it.renderTree(); println() }
+        .findNode(from)
+        .let { wrappedFrom ->
+            StringDatasetSample(
+                getLeafPaths(wrappedFrom!!, targetIndex).unbox().map { path -> path.toDatasetStyle(range2type) },
+                getRootPath(wrappedFrom).unbox().toDatasetStyle(range2type),
+                targetIndex
+            )
+        }
+}
+
+private fun buildTree(element: PsiElement, parent: AstWithAfterLast?): AstWithAfterLast {
+    val currentTree = AstWithAfterLast(element, parent)
+    currentTree.children += element.children.filterIsInstance(KtElement::class.java).map { buildTree(it, currentTree) }
+
+    return currentTree
+}
+
+private fun AstWithAfterLast.addAfterLast(except: List<KtElement> = emptyList()): AstWithAfterLast = apply {
+    children.forEach { it.addAfterLast(except) }
+
+    if (except.all { original !== it }) {
+        children += AstWithAfterLast(AfterLast, parent = this)
+    }
+}
+
+private fun AstWithAfterLast.elementsFromDepth(depth: Int): List<AstWithAfterLast> {
+    if (depth == 0) {
+        return listOf(this)
+    }
+
+    return children.fold(mutableListOf()) { nodes, element ->
+        nodes.apply { this += element.elementsFromDepth(depth - 1) }
+    }
+}
+
+private fun AstWithAfterLast.findNode(element: PsiElement): AstWithAfterLast? {
+    if (original === element) {
+        return this
+    }
+
+    return children.mapNotNull { it.findNode(element) }.singleOrNull()
+}
+
+private fun List<AstWithAfterLast>.smartlyTake(samplesCount: Int): List<AstWithAfterLast> {
+    val notAfterLast = filterNot { it.original === AfterLast }.shuffled().toMutableList()
+    val afterLast = filter { it.original === AfterLast }.shuffled().toMutableList()
+
+    val rankedMerge = mutableListOf<AstWithAfterLast>()
+    while (afterLast.isNotEmpty() || notAfterLast.isNotEmpty()) {
+        if (afterLast.isEmpty() || notAfterLast.isEmpty()) {
+            rankedMerge += notAfterLast
+            rankedMerge += afterLast
+            break
+        }
+
+        rankedMerge += if (Random.nextDouble() < 0.95) notAfterLast.removeLast() else afterLast.removeLast()
+    }
+
+    return rankedMerge.take(samplesCount)
+}
+
+private fun getLeafPaths(from: AstWithAfterLast, targetIndex: Int): List<List<AstWithAfterLast>> {
+    fun AstWithAfterLast.successors(): List<AstWithAfterLast> {
         if (children.isEmpty()) return listOf(this)
 
         return children.fold(mutableListOf()) { successors, element ->
@@ -69,51 +131,50 @@ private fun getAllLeafPaths(root: PsiElement, from: PsiElement, targetIndex: Int
         }
     }
 
-    fun leafPaths(root: PsiElement, from: PsiElement, currentPath: List<PsiElement> = emptyList()): List<List<PsiElement>> {
-        return when (from) {
-            is KtElement -> {
-                val previousElementInPath = currentPath.lastOrNull()
+    fun leafPaths(from: AstWithAfterLast, currentPath: List<AstWithAfterLast> = emptyList()): List<List<AstWithAfterLast>> {
+        val previousElementInPath = currentPath.lastOrNull()
 
-                val actualChildren = from.children.toMutableList()
-                if (from !== root) actualChildren += from.parent
-                actualChildren -= previousElementInPath
+        val actualChildren = from.children.toMutableList()
+        if (from.parent != null) actualChildren += from.parent
+        actualChildren.remove(previousElementInPath)
 
-                if (actualChildren.isEmpty() && from !== root) {
-                    return listOf(currentPath + from)
-                }
+        if (actualChildren.isEmpty() && from.parent != null) {
+            return listOf(currentPath + from)
+        }
 
-                actualChildren.fold(mutableListOf()) { paths, element ->
-                    paths.apply { this += leafPaths(root, element, currentPath + from) }
-                }
-            }
-            else -> emptyList() //PsiComment, PsiWhitespace
+        return actualChildren.fold(mutableListOf()) { paths, element ->
+            paths.apply { this += leafPaths(element, currentPath + from) }
         }
     }
 
     val successors = from.children.toList().drop(targetIndex).flatMap { it.successors() }
-    val allPaths = leafPaths(root, from).map { it.reversed() }
+    val allPaths = leafPaths(from).map { it.reversed() }
     return allPaths.filter { it.first() !in successors }
 }
 
-private fun elementsFromDepth(psiElement: PsiElement, depth: Int): List<PsiElement> {
-    if (depth == 0) {
-        return listOf(psiElement)
-    }
-
-    return psiElement.children.fold(mutableListOf()) { nodes, element ->
-        nodes.apply { this += elementsFromDepth(element, depth - 1) }
-    }
-}
-
-private fun getRootPath(root: PsiElement, maskedElement: PsiElement): List<PsiElement> {
-    val path = mutableListOf(maskedElement)
-    while (path.last() !== root) {
-        path += path.last().parent
+private fun getRootPath(from: AstWithAfterLast): List<AstWithAfterLast> {
+    val path = mutableListOf(from)
+    while (true) {
+        val parent = path.last().parent
+        if (parent != null) path += parent else break
     }
 
     return path.reversed()
 }
 
-val testOnlyGetAllLeafPaths: (PsiElement, PsiElement, Int) -> List<List<PsiElement>> = ::getAllLeafPaths
-val testOnlyElementsFromDepth: (PsiElement, Int) -> List<PsiElement> = ::elementsFromDepth
-val testOnlyGetRootPath: (PsiElement, PsiElement) -> List<PsiElement> = ::getRootPath
+@JvmName("unboxList")
+private fun List<AstWithAfterLast>.unbox(): List<PsiElement> {
+    return map { it.original }
+}
+
+@JvmName("unboxListList")
+private fun List<List<AstWithAfterLast>>.unbox(): List<List<PsiElement>> {
+    return map { path -> path.unbox() }
+}
+
+fun testOnlyBuildTree(element: PsiElement, parent: AstWithAfterLast?) = buildTree(element, parent)
+fun AstWithAfterLast.testOnlyAddAfterLast(except: List<KtElement>) = addAfterLast(except)
+fun AstWithAfterLast.testOnlyElementsFromDepth(depth: Int) = elementsFromDepth(depth)
+fun AstWithAfterLast.testOnlyFindNode(element: PsiElement) = findNode(element)
+fun testOnlyGetLeafPaths(from: AstWithAfterLast, targetIndex: Int) = getLeafPaths(from, targetIndex)
+fun testOnlyGetRootPath(from: AstWithAfterLast) = getRootPath(from)

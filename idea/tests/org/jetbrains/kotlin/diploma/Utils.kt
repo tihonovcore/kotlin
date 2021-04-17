@@ -71,10 +71,6 @@ fun PsiElement.kind(): String {
         return AFTER_LAST_KIND
     }
 
-    if (this.isAfterLast()) {
-        return AFTER_LAST_KIND
-    }
-
     if (this is KtElement) {
         return accept(psi2kind, null)
     }
@@ -84,7 +80,7 @@ fun PsiElement.kind(): String {
 
 fun Any.json(): String = Gson().toJson(this)
 
-fun List<DatasetSample>.skipTooBig(): List<DatasetSample> {
+fun List<StringDatasetSample>.skipTooBig(): List<StringDatasetSample> {
     return filter { it.leafPaths.size <= 1000 }
 }
 

@@ -46,7 +46,7 @@ class Pipeline(project: Project) {
             }
 
             try {
-                val jsonDatasetSample = extractPaths(file, current, notFinished).json()
+                val jsonDatasetSample = createSampleForPredict(file, current, notFinished).json()
                 val predictedNode = predictNode(jsonDatasetSample.toIntegerDatasetSample())
                 val newChild = current.append(decoder.decode(predictedNode))
 
@@ -65,7 +65,7 @@ class Pipeline(project: Project) {
         val i2s = File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/integer/string2integer.json").readText()
         val string2integer = JsonParser.parseString(i2s).asJsonObject
 
-        val sample = Gson().fromJson(this, DatasetSample::class.java)
+        val sample = Gson().fromJson(this, StringDatasetSample::class.java)
         return listOf(
             IntegerDatasetSample(
                 sample.leafPaths.map { path -> path.map { node -> string2integer[node]!!.asInt } },
