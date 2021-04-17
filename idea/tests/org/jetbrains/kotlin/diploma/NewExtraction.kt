@@ -14,7 +14,19 @@ private class AstWithAfterLast(
     val original: PsiElement,
     val parent: AstWithAfterLast?,
     val children: MutableList<AstWithAfterLast> = mutableListOf()
-)
+) {
+    fun renderTree(tab: Int = 0) {
+        if (original is KtElement) {
+            val kind = original.kind()
+
+            repeat(tab) { print("    ") }
+            println(kind)
+        }
+
+        children.forEach { it.renderTree(tab + 1) }
+    }
+
+}
 
 fun new_createDatasetSamples(
     root: PsiElement,
@@ -38,6 +50,27 @@ fun new_createDatasetSamples(
         }
 }
 
+fun extractPaths(
+    root: PsiElement,
+    from: PsiElement,
+    notFinished: List<KtElement>,
+    range2type: Map<TextRange, String> = emptyMap()
+): DatasetSample {
+    val targetIndex = from.children.size
+
+    return buildTree(root, null)
+        .addAfterLast(notFinished)
+        .also { println(from.kind()); it.renderTree(); println() }
+        .findNode(from)
+        .let { wrappedFrom ->
+            DatasetSample(
+                getLeafPaths(wrappedFrom!!, targetIndex).unbox().map { path -> path.toDatasetStyle(range2type) },
+                getRootPath(wrappedFrom).unbox().toDatasetStyle(range2type),
+                targetIndex
+            )
+        }
+}
+
 private fun buildTree(element: PsiElement, parent: AstWithAfterLast?): AstWithAfterLast {
     val currentTree = AstWithAfterLast(element, parent)
     currentTree.children += element.children.filterIsInstance(KtElement::class.java).map { buildTree(it, currentTree) }
@@ -45,9 +78,12 @@ private fun buildTree(element: PsiElement, parent: AstWithAfterLast?): AstWithAf
     return currentTree
 }
 
-private fun AstWithAfterLast.addAfterLast(): AstWithAfterLast = apply {
-    children.forEach { it.addAfterLast() }
-    children += AstWithAfterLast(AfterLast, parent = this)
+private fun AstWithAfterLast.addAfterLast(except: List<KtElement> = emptyList()): AstWithAfterLast = apply {
+    children.forEach { it.addAfterLast(except) }
+
+    if (except.all { original !== it }) {
+        children += AstWithAfterLast(AfterLast, parent = this)
+    }
 }
 
 private fun AstWithAfterLast.elementsFromDepth(depth: Int): List<AstWithAfterLast> {
@@ -58,6 +94,14 @@ private fun AstWithAfterLast.elementsFromDepth(depth: Int): List<AstWithAfterLas
     return children.fold(mutableListOf()) { nodes, element ->
         nodes.apply { this += element.elementsFromDepth(depth - 1) }
     }
+}
+
+private fun AstWithAfterLast.findNode(element: PsiElement): AstWithAfterLast? {
+    if (original === element) {
+        return this
+    }
+
+    return children.mapNotNull { it.findNode(element) }.singleOrNull()
 }
 
 private fun List<AstWithAfterLast>.smartlyTake(samplesCount: Int): List<AstWithAfterLast> {

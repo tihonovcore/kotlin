@@ -14,7 +14,7 @@ class Kind2Psi(private val project: Project) {
 
     fun decode(predictedNode: String): KtElement = with(factory) {
         when (predictedNode) {
-            AFTER_LAST_KIND -> newAfterLast(project)
+            AFTER_LAST_KIND -> throw Pipeline.AfterLastException
             "BOX_TEMPLATE" -> createFile("fun box() {}")
 
             "ANNOTATED_EXPRESSION" -> TODO()
@@ -23,19 +23,18 @@ class Kind2Psi(private val project: Project) {
             "ANNOTATION_TARGET" -> TODO()
             "ARRAY_ACCESS_EXPRESSION" -> TODO()
             "BINARY_EXPRESSION" -> {
-                val file = createFile("fun foo() = x != y")
-                val func = file.children.last()
-                val expr = func.children.last()
-                expr.children.forEach { it.delete() }
-                expr as KtElement
+                val file = createFile("fun foo() = dropMe != dropMe")
+                val func = file.children.last() as KtNamedFunction
+                val expr = func.children.last() as KtExpression
+                expr.drop()
             }
             "BINARY_WITH_TYPE" -> TODO()
             "BLOCK" -> TODO()
             "BODY" -> TODO()
-            "BOOLEAN_CONSTANT" -> TODO()
-            "BREAK" -> TODO()
+            "BOOLEAN_CONSTANT" -> createExpression("false")
+            "BREAK" -> createExpression("break")
             "CALLABLE_REFERENCE_EXPRESSION" -> TODO()
-            "CALL_EXPRESSION" -> TODO()
+            "CALL_EXPRESSION" -> createExpression("foo(bar)")
             "CATCH" -> TODO()
             "CHARACTER_CONSTANT" -> createExpression("'q'")
             "CLASS" -> createClass("class A {}")
@@ -51,8 +50,12 @@ class Kind2Psi(private val project: Project) {
             "DELEGATED_SUPER_TYPE_ENTRY" -> TODO()
             "DESTRUCTURING_DECLARATION" -> TODO()
             "DESTRUCTURING_DECLARATION_ENTRY" -> TODO()
-            "DOT_QUALIFIED_EXPRESSION" -> TODO()
-            "DO_WHILE" -> TODO()
+            "DOT_QUALIFIED_EXPRESSION" -> {
+                val pack = createFile("package dropMe.dropMe").children.first() as KtPackageDirective
+                val dot = pack.children.first() as KtDotQualifiedExpression
+                dot.drop()
+            }
+            "DO_WHILE" -> createExpression("do { } while(dropMe)").drop()
             "DYNAMIC_TYPE" -> TODO()
             "ELSE" -> TODO("generated as child automatically")
             "ENUM_ENTRY" -> TODO()
@@ -67,19 +70,7 @@ class Kind2Psi(private val project: Project) {
             "FUNCTION_LITERAL" -> TODO()
             "FUNCTION_TYPE" -> TODO()
             "FUNCTION_TYPE_RECEIVER" -> TODO()
-            "IF" -> {
-                createExpression("if (dropMe) { } else { }").apply {
-                    acceptChildren(object : KtVisitorVoid() {
-                        override fun visitKtElement(element: KtElement) {
-                            element.acceptChildren(this)
-                        }
-
-                        override fun visitCallExpression(expression: KtCallExpression) {
-                            expression.delete()
-                        }
-                    })
-                }
-            }
+            "IF" -> createExpression("if (dropMe) { } else { }").drop()
             "IMPORT_ALIAS" -> TODO()
             "IMPORT_DIRECTIVE" -> TODO()
             "IMPORT_LIST" -> TODO()
@@ -96,26 +87,26 @@ class Kind2Psi(private val project: Project) {
             "LONG_STRING_TEMPLATE_ENTRY" -> TODO()
             "LOOP_RANGE" -> TODO()
             "MODIFIER_LIST" -> TODO()
-            "NULL" -> TODO()
+            "NULL" -> createExpression("null")
             "NULLABLE_TYPE" -> TODO()
-            "OBJECT_DECLARATION" -> TODO()
+            "OBJECT_DECLARATION" -> createObject("object Object {}")
             "OBJECT_LITERAL" -> TODO()
             "OPERATION_REFERENCE" -> {
                 val file = createFile("fun foo() = x != y")
-                val func = file.children.last()
-                val expr = func.children.last()
-                expr.children[1] as KtElement
+                val func = file.children.last() as KtNamedFunction
+                val expr = func.children.last() as KtExpression
+                expr.children[1] as KtOperationReferenceExpression
             }
             "PACKAGE_DIRECTIVE" -> TODO()
             "PARENTHESIZED" -> TODO()
             "POSTFIX_EXPRESSION" -> TODO()
             "PREFIX_EXPRESSION" -> TODO()
             "PRIMARY_CONSTRUCTOR" -> TODO()
-            "PROPERTY" -> TODO()
+            "PROPERTY" -> createProperty("val prop = dropMe").drop()
             "PROPERTY_ACCESSOR" -> TODO()
             "PROPERTY_DELEGATE" -> TODO()
             "REFERENCE_EXPRESSION" -> createExpression("x")
-            "RETURN" -> TODO()
+            "RETURN" -> createExpression("return dropMe").drop()
             "SAFE_ACCESS_EXPRESSION" -> TODO()
             "SECONDARY_CONSTRUCTOR" -> TODO()
             "SHORT_STRING_TEMPLATE_ENTRY" -> TODO()
@@ -137,28 +128,35 @@ class Kind2Psi(private val project: Project) {
             "TYPE_PROJECTION" -> TODO()
             "TYPE_REFERENCE" -> TODO()
             "USER_TYPE" -> TODO()
-            "VALUE_ARGUMENT" -> TODO()
-            "VALUE_ARGUMENT_LIST" -> TODO()
+            "VALUE_ARGUMENT" -> createArgument("arg")
+            "VALUE_ARGUMENT_LIST" -> createCallArguments("(x, y, z)")
             "VALUE_ARGUMENT_NAME" -> TODO()
-            "VALUE_PARAMETER" -> TODO()
+            "VALUE_PARAMETER" -> {
+                val file = createFile("fun foo(x) = false")
+                val func = file.children.last() as KtNamedFunction
+                val params = func.children.first() as KtParameterList
+                params.children.first() as KtParameter
+            }
             "VALUE_PARAMETER_LIST" -> TODO()
             "WHEN" -> TODO()
             "WHEN_CONDITION_IN_RANGE" -> TODO()
             "WHEN_CONDITION_IS_PATTERN" -> TODO()
             "WHEN_CONDITION_WITH_EXPRESSION" -> TODO()
             "WHEN_ENTRY" -> TODO()
-            "WHILE" -> createExpression("while(dropMe) { }").apply {
-                acceptChildren(object : KtVisitorVoid() {
-                    override fun visitKtElement(element: KtElement) {
-                        element.acceptChildren(this)
-                    }
-
-                    override fun visitReferenceExpression(expression: KtReferenceExpression) {
-                        expression.delete()
-                    }
-                })
-            }
+            "WHILE" -> createExpression("while(dropMe) { }").drop()
             else -> throw IllegalArgumentException("Unsupported node: $predictedNode")
         }
+    }
+
+    private fun KtElement.drop(): KtElement = apply {
+        acceptChildren(object : KtVisitorVoid() {
+            override fun visitKtElement(element: KtElement) {
+                element.acceptChildren(this)
+            }
+
+            override fun visitReferenceExpression(expression: KtReferenceExpression) {
+                expression.delete()
+            }
+        })
     }
 }
