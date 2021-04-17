@@ -69,7 +69,12 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
         string2integer(stringDatasetDirectory, integerDatasetDirectory)
     }
 
-    private fun string2integer(stringDatasetDirectory: String, integerDatasetDirectory: String) {
+    private fun string2integer(
+        stringDatasetDirectory: String,
+        integerDatasetDirectory: String,
+        printDatasetStatistics: Boolean = true
+    ) {
+        val stat = mutableMapOf<String, Int>()
         val vocab = mutableSetOf<String>()
         val gson = Gson()
 
@@ -80,7 +85,13 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
                         path.forEach { node -> vocab.add(node) }
                     }
                     rootPath.forEach { node -> vocab.add(node) }
-                    if (target != null) vocab.add(target)
+
+                    if (target != null) {
+                        vocab.add(target)
+
+                        val old = stat[target] ?: 0
+                        stat[target] = old + 1
+                    }
                 }
             }
         }
@@ -111,6 +122,12 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             }.json()
 
             integerDataset.appendText(integerSamples + System.lineSeparator())
+        }
+
+        if (printDatasetStatistics) {
+            for ((k, v) in stat.toList().sortedBy { it.second }.reversed()) {
+                println("$v\t --> $k")
+            }
         }
     }
 
