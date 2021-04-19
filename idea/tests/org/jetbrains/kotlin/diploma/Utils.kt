@@ -62,7 +62,7 @@ fun File.mustBeSkipped(): Boolean {
         contains(Regex("//\\s*?FILE:"))
                 || contains(Regex("//\\s*?WITH_RUNTIME"))
                 || contains(Regex("//\\s*?FILE: .*?\\.java"))
-                || name in listOf("kt30402.kt")
+                || name in listOf("kt30402.kt", "crossTypeEquals.kt")
     }
 }
 
@@ -81,7 +81,9 @@ fun PsiElement.kind(): String {
 fun Any.json(): String = Gson().toJson(this)
 
 fun List<StringDatasetSample>.skipTooBig(): List<StringDatasetSample> {
-    return filter { it.leafPaths.size <= 1000 }
+    return filter {
+        it.leafPaths.size <= 1000 && it.leafPaths.all { path -> path.size <= 60 } && it.indexAmongBrothers <= 15
+    }
 }
 
 fun KtElement.append(new: KtElement): KtElement {

@@ -74,24 +74,36 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
         integerDatasetDirectory: String,
         printDatasetStatistics: Boolean = true
     ) {
-        val stat = mutableMapOf<String, Int>()
+        val pathCountStatistics = mutableMapOf<Int, Int>()
+        val pathLengthStatistics = mutableMapOf<Int, Int>()
+        val indexStatistics = mutableMapOf<Int, Int>()
+        val targetFrequency = mutableMapOf<String, Int>()
+
+        fun <K> MutableMap<K, Int>.update(key: K) {
+            val old = get(key) ?: 0
+            set(key, old + 1)
+        }
+
         val vocab = mutableSetOf<String>()
         val gson = Gson()
 
         File("$stringDatasetDirectory/dataset.json").forEachLine { line ->
             JsonParser.parseString(line).asJsonArray.forEach { sample ->
                 gson.fromJson(sample, StringDatasetSample::class.java).apply {
+                    pathCountStatistics.update(leafPaths.size)
+
                     leafPaths.forEach { path ->
                         path.forEach { node -> vocab.add(node) }
+                        pathLengthStatistics.update(path.size)
                     }
                     rootPath.forEach { node -> vocab.add(node) }
 
                     if (target != null) {
                         vocab.add(target)
-
-                        val old = stat[target] ?: 0
-                        stat[target] = old + 1
+                        targetFrequency.update(target)
                     }
+
+                    indexStatistics.update(indexAmongBrothers)
                 }
             }
         }
@@ -125,9 +137,41 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
         }
 
         if (printDatasetStatistics) {
-            for ((k, v) in stat.toList().sortedBy { it.second }.reversed()) {
-                println("$v\t --> $k")
+            println("#### TARGET FREQUENCY")
+            for ((k, f) in targetFrequency.toList().sortedBy { it.second }.reversed()) {
+                println("$f\t\t --> $k")
             }
+
+            fun Map<Int, Int>.greatThen(x: Int) {
+                val cnt = filter { it.key > x }.map { it.value }.sum()
+                println(">$x: $cnt")
+            }
+
+            println()
+            println("#### PATH COUNT")
+            pathCountStatistics.greatThen(0)
+            pathCountStatistics.greatThen(300)
+            pathCountStatistics.greatThen(500)
+            pathCountStatistics.greatThen(800)
+            pathCountStatistics.greatThen(1000)
+
+            println()
+            println("#### PATH LENGTH")
+            pathLengthStatistics.greatThen(0)
+            pathLengthStatistics.greatThen(20)
+            pathLengthStatistics.greatThen(25)
+            pathLengthStatistics.greatThen(30)
+            pathLengthStatistics.greatThen(50)
+            pathLengthStatistics.greatThen(60)
+            pathLengthStatistics.greatThen(70)
+
+            println()
+            println("#### INDEX STAT")
+            indexStatistics.greatThen(-1)
+            indexStatistics.greatThen(5)
+            indexStatistics.greatThen(10)
+            indexStatistics.greatThen(15)
+            indexStatistics.greatThen(20)
         }
     }
 
