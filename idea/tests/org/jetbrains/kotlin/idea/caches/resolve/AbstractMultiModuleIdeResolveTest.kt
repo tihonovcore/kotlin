@@ -26,6 +26,7 @@ import org.jetbrains.kotlin.idea.resolve.getDataFlowValueFactory
 import org.jetbrains.kotlin.idea.resolve.getLanguageVersionSettings
 import org.jetbrains.kotlin.idea.stubs.AbstractMultiModuleTest
 import org.jetbrains.kotlin.idea.test.PluginTestCaseBase
+import org.jetbrains.kotlin.psi.KtElement
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.test.KotlinTestUtils
 import org.jetbrains.kotlin.test.TestMetadata
@@ -84,7 +85,6 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             set(key, old + 1)
         }
 
-        val vocab = mutableSetOf<String>()
         val gson = Gson()
 
         File("$stringDatasetDirectory/dataset.json").forEachLine { line ->
@@ -93,13 +93,10 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
                     pathCountStatistics.update(leafPaths.size)
 
                     leafPaths.forEach { path ->
-                        path.forEach { node -> vocab.add(node) }
                         pathLengthStatistics.update(path.size)
                     }
-                    rootPath.forEach { node -> vocab.add(node) }
 
                     if (target != null) {
-                        vocab.add(target)
                         targetFrequency.update(target)
                     }
 
@@ -109,13 +106,11 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
         }
 
         val string2integer = mutableMapOf<String, Int>()
-        val integer2string = mutableMapOf<Int, String>()
-        vocab.sorted().forEachIndexed { integer, string ->
-            string2integer[string] = integer
-            integer2string[integer] = string
+        File("$integerDatasetDirectory/string2integer.json").readText().apply {
+            for ((string, integer) in JsonParser.parseString(this).asJsonObject.entrySet()) {
+                string2integer[string] = integer.asInt
+            }
         }
-        File("$integerDatasetDirectory/string2integer.json").writeText(string2integer.json())
-        File("$integerDatasetDirectory/integer2string.json").writeText(integer2string.json())
 
         val integerDataset = File("$integerDatasetDirectory/dataset.json").apply {
             if (exists()) writeText("")
@@ -280,15 +275,41 @@ abstract class AbstractMultiplatformAnalysisTest : AbstractDiagnosticCodeMetaInf
 class PathExtractor : AbstractMultiModuleIdeResolveTest() {
     override fun getTestDataPath(): String = PluginTestCaseBase.getTestDataPathBase()
 
-    @TestMetadata("createDataset")
-    fun testCreateDataset() {
-//        val sourceCodeDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/samples/small"
-        val sourceCodeDirectory = "/home/tihonovcore/diploma/kotlin/compiler/testData/codegen/box"
-        val stringDatasetDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/string"
-        val integerDatasetDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/integer"
+    val sourceCodeDirectory = "/home/tihonovcore/diploma/kotlin/compiler/testData/codegen/box"
+    val stringDatasetDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/string"
+    val integerDatasetDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/integer"
 
-        createDataset(sourceCodeDirectory, stringDatasetDirectory, integerDatasetDirectory)
+    @TestMetadata("createMapping")
+    fun testCreateMapping() {
+        val vocabulary = mutableSetOf(AFTER_LAST_KIND, UP_ARROW, DOWN_ARROW)
+
+        File(sourceCodeDirectory).walkTopDown().forEach { file ->
+            if (file.mustBeSkipped()) return@forEach
+
+            val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
+            fun KtElement.dfs(): List<KtElement> {
+                return children.filterIsInstance(KtElement::class.java).fold(mutableListOf(this)) { accum, child ->
+                    accum.apply { this += child.dfs() }
+                }
+            }
+
+            vocabulary += sourceKtFile.dfs().map { it.kind() }
+        }
+
+        val string2integer = mutableMapOf<String, Int>()
+        val integer2string = mutableMapOf<Int, String>()
+        vocabulary.sorted().forEachIndexed { integer, string ->
+            string2integer[string] = integer
+            integer2string[integer] = string
+        }
+
+        File(integerDatasetDirectory).mkdirs()
+        File("$integerDatasetDirectory/string2integer.json").writeText(string2integer.json())
+        File("$integerDatasetDirectory/integer2string.json").writeText(integer2string.json())
     }
+
+    @TestMetadata("createDataset")
+    fun testCreateDataset() = createDataset(sourceCodeDirectory, stringDatasetDirectory, integerDatasetDirectory)
 
     @TestMetadata("generationPipeline")
     fun testGenerationPipeline() = runPipeline()

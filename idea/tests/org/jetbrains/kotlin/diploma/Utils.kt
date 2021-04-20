@@ -30,6 +30,9 @@ fun PsiElement.renderTree(
     children.forEach { it.renderTree(range2type, tab + 1) }
 }
 
+const val DOWN_ARROW = "↓"
+const val UP_ARROW = "↑"
+
 fun List<PsiElement>.toDatasetStyle(range2type: Map<TextRange, String>): List<String> {
     // NOTE: вроде бы от PSI там только комменты и пробелы,
     // поэтому можно оставить только KtElement
@@ -44,10 +47,10 @@ fun List<PsiElement>.toDatasetStyle(range2type: Map<TextRange, String>): List<St
 
         val next = ktElements.getOrNull(index + 1) ?: return@forEachIndexed
         result += when {
-            next === AfterLast -> "↓" //AfterLast has not children => we come from parent
-            element === AfterLast -> "↑" //AfterLast has not children => we go to parent
-            element === next.parent -> "↓"
-            element.parent === next -> "↑"
+            next === AfterLast -> DOWN_ARROW //AfterLast has not children => we come from parent
+            element === AfterLast -> UP_ARROW //AfterLast has not children => we go to parent
+            element === next.parent -> DOWN_ARROW
+            element.parent === next -> UP_ARROW
             else -> throw IllegalStateException("Neighbouring nodes aren't <parent, child> or <child, parent>")
         }
     }
