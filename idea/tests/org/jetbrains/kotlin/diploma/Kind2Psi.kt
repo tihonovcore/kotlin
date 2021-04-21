@@ -15,7 +15,7 @@ class Kind2Psi(private val project: Project) {
     fun decode(predictedNode: String): KtElement = with(factory) {
         when (predictedNode) {
             AFTER_LAST_KIND -> throw Pipeline.AfterLastException
-            "BOX_TEMPLATE" -> createFile("fun box() {}")
+            "BOX_TEMPLATE" -> createFile("fun box() {}").also { it.children.first().delete(); it.children.first().delete() }
 
             "ANNOTATED_EXPRESSION" -> TODO()
             "ANNOTATION" -> TODO()
@@ -77,18 +77,26 @@ class Kind2Psi(private val project: Project) {
             "INDICES" -> TODO()
             "INITIALIZER_LIST" -> TODO()
             "INTEGER_CONSTANT" -> createExpression("123")
-            "IS_EXPRESSION" -> TODO()
+            "IS_EXPRESSION" -> {
+                val expr = createExpression("t is Int")
+                expr.apply { children.forEach { it.delete() } }
+            }
             "LABEL" -> TODO()
             "LABELED_EXPRESSION" -> TODO()
             "LABEL_QUALIFIER" -> TODO()
             "LAMBDA_ARGUMENT" -> TODO()
-            "LAMBDA_EXPRESSION" -> TODO()
             "LITERAL_STRING_TEMPLATE_ENTRY" -> TODO()
+            "LAMBDA_EXPRESSION" -> createExpression("{ dropMe }").drop() as KtLambdaExpression
             "LONG_STRING_TEMPLATE_ENTRY" -> TODO()
             "LOOP_RANGE" -> TODO()
             "MODIFIER_LIST" -> TODO()
             "NULL" -> createExpression("null")
-            "NULLABLE_TYPE" -> TODO()
+            "NULLABLE_TYPE" -> {
+                val prop = createProperty("val x: Int? = 3")
+                val type = prop.children.first() as KtTypeReference
+                val nullable = type.children.single() as KtNullableType
+                nullable.apply { children.single().delete() }
+            }
             "OBJECT_DECLARATION" -> createObject("object Object {}")
             "OBJECT_LITERAL" -> TODO()
             "OPERATION_REFERENCE" -> {
@@ -101,7 +109,7 @@ class Kind2Psi(private val project: Project) {
             "PARENTHESIZED" -> TODO()
             "POSTFIX_EXPRESSION" -> TODO()
             "PREFIX_EXPRESSION" -> TODO()
-            "PRIMARY_CONSTRUCTOR" -> TODO()
+            "PRIMARY_CONSTRUCTOR" -> createPrimaryConstructor("()")
             "PROPERTY" -> createProperty("val prop = dropMe").drop()
             "PROPERTY_ACCESSOR" -> TODO()
             "PROPERTY_DELEGATE" -> TODO()
@@ -123,11 +131,29 @@ class Kind2Psi(private val project: Project) {
             "TYPE_ARGUMENT_LIST" -> TODO()
             "TYPE_CONSTRAINT" -> TODO()
             "TYPE_CONSTRAINT_LIST" -> TODO()
-            "TYPE_PARAMETER" -> TODO()
-            "TYPE_PARAMETER_LIST" -> TODO()
+            "TYPE_PARAMETER" -> {
+                val func = createFunction("fun <T> foo() = false")
+                val list = func.children.first() as KtTypeParameterList
+                val type = list.children.first() as KtTypeParameter
+                type
+            }
+            "TYPE_PARAMETER_LIST" -> {
+                val func = createFunction("fun <T> foo() = false")
+                val list = func.children.first() as KtTypeParameterList
+                list.apply { children.forEach { it.delete() } }
+            }
             "TYPE_PROJECTION" -> TODO()
-            "TYPE_REFERENCE" -> TODO()
-            "USER_TYPE" -> TODO()
+            "TYPE_REFERENCE" -> {
+                val prop = createProperty("val x: Int = 3")
+                val type = prop.children.first() as KtTypeReference
+                type.apply { children.single().delete() }
+            }
+            "USER_TYPE" -> {
+                val prop = createProperty("val x: Int = 3")
+                val type = prop.children.first() as KtTypeReference
+                val userType = type.children.single() as KtUserType
+                userType.apply { children.single().delete() }
+            }
             "VALUE_ARGUMENT" -> createArgument("arg")
             "VALUE_ARGUMENT_LIST" -> createCallArguments("(x, y, z)")
             "VALUE_ARGUMENT_NAME" -> TODO()
@@ -137,7 +163,7 @@ class Kind2Psi(private val project: Project) {
                 val params = func.children.first() as KtParameterList
                 params.children.first() as KtParameter
             }
-            "VALUE_PARAMETER_LIST" -> TODO()
+            "VALUE_PARAMETER_LIST" -> TODO("generated as child automatically")
             "WHEN" -> TODO()
             "WHEN_CONDITION_IN_RANGE" -> TODO()
             "WHEN_CONDITION_IS_PATTERN" -> TODO()
