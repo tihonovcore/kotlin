@@ -87,7 +87,7 @@ class PathExtractionTest : DiplomaTests() {
         val file = createFile()
 
         //AFTER_LAST - single child of REFERENCE_EXPRESSION(x) at `print(x)`
-        val sample = createSamplesForDataset(file, emptyMap(), 15, 1).single()
+        val sample = createSamplesForDataset(file, emptyMap(), 15..15 , 1).single()
 
         val (actualLeafPaths, actualRootPath, actualIndexAmongBrothers, actualTarget) = sample
 

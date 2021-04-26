@@ -58,7 +58,7 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             if (!useTypes) range2type.clear()
 
             try {
-                val samples = createSamplesForDataset(sourceKtFile, range2type, 3, 3).skipTooBig()
+                val samples = createSamplesForDataset(sourceKtFile, range2type, 5..25, 10).skipTooBig()
                 output.appendText(samples.json() + System.lineSeparator())
             } catch (e: Exception) {
                 println(file.absolutePath)

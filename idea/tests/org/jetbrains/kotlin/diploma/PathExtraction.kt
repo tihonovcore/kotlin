@@ -31,7 +31,7 @@ class AstWithAfterLast(
 fun createSamplesForDataset(
     root: PsiElement,
     range2type: Map<TextRange, String>,
-    depth: Int,
+    depth: IntRange,
     samplesCount: Int
 ): List<StringDatasetSample> {
     return buildTree(root, null)
@@ -71,19 +71,23 @@ fun createSampleForPredict(
         }
 }
 
-private fun buildTree(element: PsiElement, parent: AstWithAfterLast?): AstWithAfterLast {
+fun buildTree(element: PsiElement, parent: AstWithAfterLast?): AstWithAfterLast {
     val currentTree = AstWithAfterLast(element, parent)
     currentTree.children += element.children.filterIsInstance(KtElement::class.java).map { buildTree(it, currentTree) }
 
     return currentTree
 }
 
-private fun AstWithAfterLast.addAfterLast(except: List<KtElement> = emptyList()): AstWithAfterLast = apply {
+fun AstWithAfterLast.addAfterLast(except: List<KtElement> = emptyList()): AstWithAfterLast = apply {
     children.forEach { it.addAfterLast(except) }
 
     if (except.all { original !== it }) {
         children += AstWithAfterLast(AfterLast, parent = this)
     }
+}
+
+private fun AstWithAfterLast.elementsFromDepth(depth: IntRange): List<AstWithAfterLast> {
+    return depth.flatMap { elementsFromDepth(it) }
 }
 
 private fun AstWithAfterLast.elementsFromDepth(depth: Int): List<AstWithAfterLast> {
