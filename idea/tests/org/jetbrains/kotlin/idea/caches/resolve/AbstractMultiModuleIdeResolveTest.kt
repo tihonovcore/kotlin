@@ -67,7 +67,61 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             }
         }
 
+        randomSampling(stringDatasetDirectory)
         string2integer(stringDatasetDirectory, integerDatasetDirectory)
+    }
+
+    private fun randomSampling(stringDatasetDirectory: String) {
+        val prefix = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out"
+        val samples = mutableMapOf<String, MutableList<Pair<Int, Int>>>()
+
+        var lineNumber = 0
+        File("$stringDatasetDirectory/dataset.json").forEachLine { line ->
+            JsonParser.parseString(line).asJsonArray.forEachIndexed { index, it ->
+                val sample = Gson().fromJson(it, StringDatasetSample::class.java)
+
+                samples.putIfAbsent(sample.target!!, mutableListOf())
+                samples[sample.target]!! += Pair(lineNumber, index)
+            }
+
+            lineNumber++
+        }
+
+        val positions = mutableSetOf<Pair<Int, Int>>()
+        for (kind in samples.keys) {
+            positions += samples[kind]!!.shuffled().take(100)
+        }
+
+        lineNumber = 0
+        val list = mutableListOf<StringDatasetSample>()
+        File("$stringDatasetDirectory/dataset.json").forEachLine { line ->
+            JsonParser.parseString(line).asJsonArray.forEachIndexed { index, it ->
+                val sample = Gson().fromJson(it, StringDatasetSample::class.java)
+
+                if (Pair(lineNumber, index) in positions) {
+                    list += sample
+
+                    if (list.size >= 10) {
+                        val out = list.json() + System.lineSeparator()
+                        list.clear()
+
+                        File("$prefix/string/tmp.json").appendText(out)
+                    }
+                }
+            }
+
+            lineNumber++
+        }
+
+        if (list.isNotEmpty()) {
+            val out = list.json() + System.lineSeparator()
+            list.clear()
+
+            File("$prefix/string/tmp.json").appendText(out)
+        }
+
+        File("$prefix/string/dataset.json").delete()
+        File("$prefix/string/tmp.json").renameTo(File("$prefix/string/dataset.json"))
     }
 
     private fun string2integer(
