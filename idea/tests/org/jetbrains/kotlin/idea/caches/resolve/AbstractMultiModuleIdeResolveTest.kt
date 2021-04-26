@@ -31,6 +31,7 @@ import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.test.KotlinTestUtils
 import org.jetbrains.kotlin.test.TestMetadata
 import java.io.File
+import java.lang.System.exit
 import java.nio.file.Paths
 
 abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
@@ -367,4 +368,102 @@ class PathExtractor : AbstractMultiModuleIdeResolveTest() {
 
     @TestMetadata("generationPipeline")
     fun testGenerationPipeline() = runPipeline()
+
+    @TestMetadata("showKindExamples")
+    fun testShowKindExamples() {
+        val vocabulary = mutableSetOf<String>()
+
+        File(sourceCodeDirectory).walkTopDown().forEach { file ->
+            if (file.mustBeSkipped()) return@forEach
+
+            val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
+            fun KtElement.dfs(): List<KtElement> {
+                return children.filterIsInstance(KtElement::class.java).fold(mutableListOf(this)) { accum, child ->
+                    accum.apply { this += child.dfs() }
+                }
+            }
+
+            sourceKtFile.dfs().forEach ff@{
+                val kind = it.kind()
+                if (kind in vocabulary) return@ff
+
+                println("### $kind")
+                println(it.text)
+                println("### AT")
+                println(it.parent.text)
+                println()
+                println()
+                println()
+
+                vocabulary += kind
+            }
+
+            if (vocabulary.size == 109) exit(0)
+        }
+    }
+
+    /**
+     * Creates mapping from kind to shortest syntactically correct subtree
+     * with that kind as root
+     */
+    @TestMetadata("fastFinishSearch")
+    fun testFastFinishSearch() {
+        val kind2finishList = mutableMapOf<String, List<String>>()
+
+        fun AstWithAfterLast.toList(): List<String> {
+            return listOf(original.kind()) + children.flatMap { it.toList() }
+        }
+
+        fun KtElement.dfs(): Int {
+            val size = children.filterIsInstance(KtElement::class.java).sumBy { it.dfs() } + 1
+            val sizeWithAfterLast = 2 * size
+
+            val kind = kind()
+            if (kind !in kind2finishList || kind2finishList[kind]!!.size > sizeWithAfterLast) {
+                val astWithAfterLast = buildTree(this, null).addAfterLast()
+                kind2finishList[kind] = astWithAfterLast.toList()
+            }
+
+            return size
+        }
+
+        File(sourceCodeDirectory).walkTopDown().forEach { file ->
+            if (file.mustBeSkipped()) return@forEach
+
+            val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
+            sourceKtFile.dfs()
+        }
+
+        File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/kind2finishList.json").writeText(kind2finishList.json())
+    }
+
+    @TestMetadata("learnParentChildRelation")
+    fun testLearnParentChildRelation() {
+        val parentChild = mutableMapOf<String, MutableSet<String>>()
+
+        fun KtElement.dfs() {
+            val parentKind = kind()
+
+            children.filterIsInstance(KtElement::class.java).forEach { element ->
+                val old = parentChild[parentKind] ?: mutableSetOf()
+                old += element.kind()
+                parentChild[parentKind] = old
+
+                element.dfs()
+            }
+
+            val old = parentChild[parentKind] ?: mutableSetOf()
+            old += AFTER_LAST_KIND
+            parentChild[parentKind] = old
+        }
+
+        File(sourceCodeDirectory).walkTopDown().forEach { file ->
+            if (file.mustBeSkipped()) return@forEach
+
+            val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
+            sourceKtFile.dfs()
+        }
+
+        File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/parentChild.json").writeText(parentChild.json())
+    }
 }
