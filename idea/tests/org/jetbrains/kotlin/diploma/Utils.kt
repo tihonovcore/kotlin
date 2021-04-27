@@ -8,9 +8,7 @@ package org.jetbrains.kotlin.diploma
 import com.google.gson.Gson
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
-import org.jetbrains.kotlin.psi.KtBlockExpression
-import org.jetbrains.kotlin.psi.KtClassBody
-import org.jetbrains.kotlin.psi.KtElement
+import org.jetbrains.kotlin.psi.*
 import java.io.File
 
 fun PsiElement.renderTree(
@@ -90,7 +88,7 @@ fun List<StringDatasetSample>.skipTooBig(): List<StringDatasetSample> {
 }
 
 fun KtElement.append(new: KtElement): KtElement {
-    if (this is KtBlockExpression || this is KtClassBody) {
+    if (this is KtBlockExpression || this is KtClassBody || this is KtParameterList || this is KtStringTemplateExpression) {
         val rightBrace = node.lastChildNode
         node.addChild(new.node, rightBrace)
         return this.children.last() as KtElement

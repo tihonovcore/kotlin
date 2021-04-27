@@ -60,7 +60,7 @@ fun createSampleForPredict(
 
     return buildTree(root, null)
         .addAfterLast(notFinished)
-        .also { println(from.kind()); it.renderTree(); println() }
+        .also { println(root.text); println(from.kind()); it.renderTree(); println() }
         .findNode(from)
         .let { wrappedFrom ->
             StringDatasetSample(

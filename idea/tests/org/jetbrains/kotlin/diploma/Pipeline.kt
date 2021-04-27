@@ -17,7 +17,7 @@ import java.io.InputStreamReader
 import java.nio.file.Files
 
 class Pipeline(project: Project) {
-    private val decoder = Kind2Psi(project)
+    private val decoder = NewKind2Psi(project)
 
     fun generateFile(): KtElement {
         val file = decoder.decode("BOX_TEMPLATE")
@@ -49,6 +49,7 @@ class Pipeline(project: Project) {
                 val jsonDatasetSample = createSampleForPredict(file, current, notFinished).json()
                 val predictedNode = predictNode(jsonDatasetSample.toIntegerDatasetSample())
                 val newChild = current.append(decoder.decode(predictedNode))
+                newChild.children.forEach { it.delete() }
 
                 if (!newChild.isTerminal()) {
                     notFinished += newChild
