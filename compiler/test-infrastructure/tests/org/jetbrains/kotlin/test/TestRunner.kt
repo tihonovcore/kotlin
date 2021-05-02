@@ -137,6 +137,10 @@ class TestRunner(private val testConfiguration: TestConfiguration) {
 
         val backendHandlers: List<AnalysisHandler<*>> = testConfiguration.getHandlers(backendKind)
         for (backendHandler in backendHandlers) {
+            if (backendHandler::class.java.simpleName != "IrTextDumpHandler") {
+                continue
+            }
+
             val thereWasAnException = withAssertionCatching {
                 if (backendHandler.shouldRun(failedAssertions.isNotEmpty())) {
                     backendHandler.hackyProcess(module, backendInputInfo)

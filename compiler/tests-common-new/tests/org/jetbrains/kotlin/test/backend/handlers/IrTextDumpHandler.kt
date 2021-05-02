@@ -33,6 +33,7 @@ import org.jetbrains.kotlin.test.utils.MultiModuleInfoDumperImpl
 import org.jetbrains.kotlin.test.utils.withExtension
 import org.jetbrains.kotlin.test.utils.withSuffixAndExtension
 import java.io.File
+import kotlin.system.exitProcess
 
 class IrTextDumpHandler(testServices: TestServices) : AbstractIrHandler(testServices) {
     companion object {
@@ -60,6 +61,10 @@ class IrTextDumpHandler(testServices: TestServices) : AbstractIrHandler(testServ
     override fun processModule(module: TestModule, info: IrBackendInput) {
         if (DUMP_IR !in module.directives) return
         val irFiles = info.backendInput.irModuleFragment.files
+
+        extractTypeTree(irFiles)
+        exitProcess(0)
+
         val testFileToIrFile = irFiles.groupWithTestFiles(module)
         val builder = baseDumper.builderForModule(module)
         for ((testFile, irFile) in testFileToIrFile) {

@@ -1,8 +1,12 @@
 // FIR_IDENTICAL
 // WITH_RUNTIME
 
+class A(val long: Long, val string: String)
+
 class C(x: Int, val y: Int, var z: Int = 1) {
     constructor() : this(0, 0, 0) {}
+
+    val ppp = A(3, "4, 5")
 
     val property: Int = 0
 
