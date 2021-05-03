@@ -1,6 +1,20 @@
 // FIR_IDENTICAL
 // WITH_RUNTIME
 
+fun topLevel(a: Int, b: Long): Char {
+    fun inner(c: A, d: B): Unit {
+
+    }
+
+    val lambda = { p: B -> p.a }
+
+    return 'c'
+}
+
+fun function(int: Int, body: (Int) -> Unit) {
+
+}
+
 class A(val i: Int) {
     lateinit var m: MutableMap<Int, Long>
     lateinit var l: List<Int>

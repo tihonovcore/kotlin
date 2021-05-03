@@ -13,8 +13,8 @@ import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.classFqName
-import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.types.classifierOrNull
+import org.jetbrains.kotlin.ir.util.constructors
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid
@@ -22,6 +22,8 @@ import org.jetbrains.kotlin.resolve.DescriptorUtils
 
 fun extractTypeGraph(irFiles: List<IrFile>) = irFiles.forEach { file ->
     val classes = mutableListOf<IrClass>()
+    val functions = mutableListOf<IrFunction>()
+
     file.acceptChildren(object : IrElementVisitorVoid {
         override fun visitElement(element: IrElement) {
             element.acceptChildren(this, null)
@@ -31,19 +33,30 @@ fun extractTypeGraph(irFiles: List<IrFile>) = irFiles.forEach { file ->
             classes += declaration
             declaration.acceptChildren(this, null)
         }
+
+        override fun visitFunction(declaration: IrFunction) {
+            val parent = declaration.parent
+            if (parent !is IrClass || parent is IrClass && declaration.symbol in parent.symbol.constructors) {
+                functions += declaration
+            }
+
+            declaration.acceptChildren(this, null)
+        }
     }, null)
 
-    val ir2description = buildDescriptions(classes).onEach { (_, description) ->
+    val (functionDescriptions, class2description) = buildDescriptions(classes, functions)
+
+    class2description.forEach { (_, description) ->
         if (description.isBasic) {
             description.dependencies.clear()
         }
     }
 
-    ir2description.forEach { (_, description) ->
+    class2description.forEach { (_, description) ->
         removeLoops(description)
     }
 
-    renderTypesDescription(ir2description)
+    renderTypesDescription(functionDescriptions, class2description)
 }
 
 private fun removeLoops(first: ClassDescription) {
@@ -75,6 +88,12 @@ private fun removeLoops(first: ClassDescription) {
     first.dfs()
 }
 
+data class FunctionDescription(
+    val parameters: List<ClassDescription> = mutableListOf(),
+    val returnType: ClassDescription,
+    val dependencies: List<ClassDescription> = mutableListOf(),
+)
+
 data class ClassDescription(
     val name: String,
     val isBasic: Boolean,
@@ -84,11 +103,12 @@ data class ClassDescription(
     val dependencies: MutableList<ClassDescription> = mutableListOf(),
 )
 
-private fun buildDescriptions(classes: List<IrClass>): Map<IrClass, ClassDescription> {
+private fun buildDescriptions(classes: List<IrClass>, functions: List<IrFunction>): Pair<List<FunctionDescription>, Map<IrClass, ClassDescription>> {
     //TODO: skip private/protected
-    val ir2description = mutableMapOf<IrClass, ClassDescription>()
-    classes.forEach { klass -> klass.toDescription(ir2description) }
-    return ir2description
+    val class2description = mutableMapOf<IrClass, ClassDescription>()
+    val functionDescriptions = functions.mapNotNull { function -> function.toDescription(class2description) }
+    classes.forEach { klass -> klass.toDescription(class2description) }
+    return Pair(functionDescriptions, class2description)
 }
 
 @OptIn(ObsoleteDescriptorBasedAPI::class)
@@ -112,8 +132,8 @@ private fun IrClass.toDescription(ir2description: MutableMap<IrClass, ClassDescr
 
     val functions = declarations
         .filterIsInstance(IrFunction::class.java)
+        .filterNot { it.symbol in symbol.constructors }
         .filterNot { it.isFakeOverride || DescriptorUtils.isOverride(it.symbol.descriptor) }
-        .filterNot { it.returnType.classOrNull === symbol }
         .map { func -> func.valueParameters.map { param -> param.type } + func.returnType }
         .mapNotNull { types ->
             val classes = types.map { it.getClass() }
@@ -139,7 +159,27 @@ private fun IrClass.toDescription(ir2description: MutableMap<IrClass, ClassDescr
     return description
 }
 
-fun String.isBasic(): Boolean {
+@OptIn(ObsoleteDescriptorBasedAPI::class)
+private fun IrFunction.toDescription(ir2description: MutableMap<IrClass, ClassDescription>): FunctionDescription? {
+    //use overridable only in supertype
+    if (isFakeOverride || DescriptorUtils.isOverride(symbol.descriptor)) return null
+
+    val irClassesForParameters = valueParameters.map { param -> param.type }.map { it.getClass() }
+    val irClassForReturnType = returnType.getClass()
+
+    if (irClassesForParameters.any { it == null } || irClassForReturnType == null) return null
+
+    val descriptionsForParameters = irClassesForParameters.map { it!!.toDescription(ir2description) }
+    val descriptionForReturnType = irClassForReturnType.toDescription(ir2description)
+
+    return FunctionDescription(
+        descriptionsForParameters,
+        descriptionForReturnType,
+        dependencies = descriptionsForParameters + descriptionForReturnType
+    )
+}
+
+private fun String.isBasic(): Boolean {
     return this in listOf(
         "kotlin.Any",
         "kotlin.Byte",
@@ -168,8 +208,15 @@ private fun IrType.getClass(): IrClass? {
     return classifierOrNull!!.owner as? IrClass
 }
 
-private fun renderTypesDescription(ir2description: Map<IrClass, ClassDescription>) {
-    ir2description.forEach { (klass, description) ->
+private fun renderTypesDescription(functionDescriptions: List<FunctionDescription>, class2description: Map<IrClass, ClassDescription>) {
+    functionDescriptions.forEach { function ->
+        println("(" + function.parameters.joinToString { it.name } + ") -> " + function.returnType.name)
+    }
+
+    println()
+    println()
+
+    class2description.forEach { (klass, description) ->
         val name = klass.defaultType.classFqName?.asString() ?: "null"
         val dependencies = description.dependencies.map { it.name }
         val supertypes = description.superTypes.map { it.name }
