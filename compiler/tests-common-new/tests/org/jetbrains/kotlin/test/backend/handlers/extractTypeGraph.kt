@@ -44,12 +44,14 @@ fun extractTypeGraph(irFiles: List<IrFile>) = irFiles.forEach { file ->
             "(" + parameters.joinToString { it.name } + ") -> " + returnType.name
         }
 
-        println("$name --> \n\tdependencies: $dependencies \n\tsupertypes:   $supertypes \n\tproperties:   $properties \n\tfunctions:    $functions")
+        val basic = if (descr.isBasic) "(is basic) " else ""
+        println("$name $basic--> \n\tdependencies: $dependencies \n\tsupertypes:   $supertypes \n\tproperties:   $properties \n\tfunctions:    $functions")
     }
 }
 
 data class ClassDescription(
     val name: String,
+    val isBasic: Boolean,
     val superTypes: MutableList<ClassDescription> = mutableListOf(),
     val properties: MutableList<ClassDescription> = mutableListOf(),
     val functions: MutableList<Pair<List<ClassDescription>, ClassDescription>> = mutableListOf(),
@@ -68,7 +70,8 @@ private fun IrClass.toDescription(ir2description: MutableMap<IrClass, ClassDescr
     val existsDescription = ir2description[this]
     if (existsDescription != null) return existsDescription
 
-    val description = ClassDescription(name = this.defaultType.classFqName!!.asString())
+    val name = defaultType.classFqName!!.asString()
+    val description = ClassDescription(name, name.isBasic())
     ir2description[this] = description
 
     val supertypeDependencies = getAllSupertypes()
@@ -108,6 +111,22 @@ private fun IrClass.toDescription(ir2description: MutableMap<IrClass, ClassDescr
     description.dependencies += supertypeDependencies
 
     return description
+}
+
+fun String.isBasic(): Boolean {
+    return this in listOf(
+        "kotlin.Any",
+        "kotlin.Byte",
+        "kotlin.Char",
+        "kotlin.Double",
+        "kotlin.Float",
+        "kotlin.Int",
+        "kotlin.Long",
+        "kotlin.Short",
+        "kotlin.CharSequence",
+        "kotlin.Boolean",
+        "kotlin.Unit"
+    )
 }
 
 private fun IrClass.getAllSupertypes(): List<IrType> {
