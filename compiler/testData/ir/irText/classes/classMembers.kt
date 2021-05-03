@@ -5,7 +5,7 @@ class A(val i: Int) {
     lateinit var m: MutableMap<Int, Long>
     lateinit var l: List<Int>
     lateinit var a: Array<Char>
-//    lateinit var r: IntRange
+    lateinit var r: IntRange
 }
 
 class B(val a: A) {

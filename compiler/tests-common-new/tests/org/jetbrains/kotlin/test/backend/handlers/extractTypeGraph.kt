@@ -36,24 +36,24 @@ fun extractTypeGraph(irFiles: List<IrFile>) = irFiles.forEach { file ->
     val ir2description = buildDescriptions(classes)
     ir2description.forEach { (klass, descr) ->
         val name = klass.defaultType.classFqName?.asString() ?: "null"
-        val members = descr.memberDependencies.map { it.name }
-        val superclasses = descr.supertypeDependencies.map { it.name }
+        val dependencies = descr.dependencies.map { it.name }
+        val supertypes = descr.superTypes.map { it.name }
 
         val properties = descr.properties.map { it.name }
         val functions = descr.functions.map { (parameters, returnType) ->
-            "(" + parameters.map { it.name }.joinToString() + ") -> " + returnType.name
+            "(" + parameters.joinToString { it.name } + ") -> " + returnType.name
         }
 
-        println("$name --> \n\tmembers:    $members \n\tsuper:      $superclasses \n\tproperties: $properties \n\tfunctions:  $functions")
+        println("$name --> \n\tdependencies: $dependencies \n\tsupertypes:   $supertypes \n\tproperties:   $properties \n\tfunctions:    $functions")
     }
 }
 
 data class ClassDescription(
     val name: String,
-    val supertypeDependencies: MutableList<ClassDescription> = mutableListOf(),
-    val memberDependencies: MutableList<ClassDescription> = mutableListOf(),
+    val superTypes: MutableList<ClassDescription> = mutableListOf(),
     val properties: MutableList<ClassDescription> = mutableListOf(),
     val functions: MutableList<Pair<List<ClassDescription>, ClassDescription>> = mutableListOf(),
+    val dependencies: MutableList<ClassDescription> = mutableListOf(),
 )
 
 private fun buildDescriptions(classes: List<IrClass>): Map<IrClass, ClassDescription> {
@@ -99,10 +99,13 @@ private fun IrClass.toDescription(ir2description: MutableMap<IrClass, ClassDescr
             Pair(parameters, returnType)
         }
 
-    description.supertypeDependencies += supertypeDependencies
-    description.memberDependencies += properties + functions.flatMap { (parameters, returnType) -> parameters + returnType }
+    description.superTypes += supertypeDependencies
     description.properties += properties
     description.functions += functions
+
+    description.dependencies += properties
+    description.dependencies += functions.flatMap { (parameters, returnType) -> parameters + returnType }
+    description.dependencies += supertypeDependencies
 
     return description
 }
