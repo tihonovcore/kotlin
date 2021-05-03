@@ -6,16 +6,18 @@
 package org.jetbrains.kotlin.test.backend.handlers
 
 import org.jetbrains.kotlin.ir.IrElement
+import org.jetbrains.kotlin.ir.ObsoleteDescriptorBasedAPI
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrProperty
+import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.classifierOrNull
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid
-import kotlin.system.exitProcess
+import org.jetbrains.kotlin.resolve.DescriptorUtils
 
-fun extractTypeTree(irFiles: List<IrFile>) = irFiles.forEach { file ->
+fun extractTypeGraph(irFiles: List<IrFile>) = irFiles.forEach { file ->
     val classes = mutableListOf<IrClass>()
     file.acceptChildren(object : IrElementVisitorVoid {
         override fun visitElement(element: IrElement) {
@@ -31,44 +33,62 @@ fun extractTypeTree(irFiles: List<IrFile>) = irFiles.forEach { file ->
     val ir2description = buildDescriptions(classes)
     ir2description.forEach { (klass, descr) ->
         val name = klass.defaultType.classFqName?.asString() ?: "null"
-        val description = descr.memberDependencies.map { it.name }
-        println("$name --> $description")
+        val members = descr.memberDependencies.map { it.name }
+        val superclasses = descr.supertypeDependencies.map { it.name }
+
+        println("$name --> \n\tmembers: $members \n\tsuper: $superclasses")
     }
 }
 
 data class ClassDescription(
     val name: String,
-    val supertypeDependencies: MutableList<ClassDescription> = mutableListOf(),
+    val supertypeDependencies: MutableSet<ClassDescription> = mutableSetOf(),
     val memberDependencies: MutableList<ClassDescription> = mutableListOf(),
     val properties: MutableList<ClassDescription> = mutableListOf(),
 //        val functions: MutableList<Pair<List<ClassDescription>, ClassDescription>> = mutableListOf(),
 )
 
 private fun buildDescriptions(classes: List<IrClass>): Map<IrClass, ClassDescription> {
-    //TODO: allClasses += superClasses
     //TODO: skip private/protected
     val ir2description = mutableMapOf<IrClass, ClassDescription>()
     classes.forEach { klass -> klass.toDescription(ir2description) }
     return ir2description
 }
 
+@OptIn(ObsoleteDescriptorBasedAPI::class)
 private fun IrClass.toDescription(ir2description: MutableMap<IrClass, ClassDescription>): ClassDescription {
     val existsDescription = ir2description[this]
     if (existsDescription != null) return existsDescription
 
-    val description = ClassDescription(this.defaultType.classFqName?.asString() ?: "null")
+    val description = ClassDescription(name = this.defaultType.classFqName!!.asString())
     ir2description[this] = description
 
-    val memberDependencies = declarations
-        .filterIsInstance(IrProperty::class.java)
-        .map { it.getter?.returnType ?: it.backingField!!.type }
-        .map { it.classifierOrNull!! }
-        .map { it.owner as IrClass }
+    val supertypeDependencies = getAllSupertypes()
+        .map { it.getClass() }
         .map { it.toDescription(ir2description) }
-        .toMutableList()
 
-    description.memberDependencies += memberDependencies
-    description.properties += memberDependencies
+    val properties = declarations
+        .filterIsInstance(IrProperty::class.java)
+        .filterNot { it.isFakeOverride || DescriptorUtils.isOverride(it.symbol.descriptor) }
+        .map { it.getType().getClass() }
+        .map { it.toDescription(ir2description) }
+
+    description.supertypeDependencies += supertypeDependencies
+    description.memberDependencies += properties
+    description.properties += properties
 
     return description
+}
+
+private fun IrClass.getAllSupertypes(): List<IrType> {
+    return superTypes + superTypes.flatMap { (it.classifierOrNull!!.owner as IrClass).getAllSupertypes() }
+}
+
+private fun IrProperty.getType(): IrType {
+    return getter?.returnType ?: backingField!!.type
+}
+
+private fun IrType.getClass(): IrClass {
+    //NOTE: not working for generic return
+    return classifierOrNull!!.owner as IrClass
 }

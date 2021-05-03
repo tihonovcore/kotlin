@@ -62,7 +62,7 @@ class IrTextDumpHandler(testServices: TestServices) : AbstractIrHandler(testServ
         if (DUMP_IR !in module.directives) return
         val irFiles = info.backendInput.irModuleFragment.files
 
-        extractTypeTree(irFiles)
+        extractTypeGraph(irFiles)
         exitProcess(0)
 
         val testFileToIrFile = irFiles.groupWithTestFiles(module)
