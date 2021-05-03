@@ -33,20 +33,46 @@ fun extractTypeGraph(irFiles: List<IrFile>) = irFiles.forEach { file ->
         }
     }, null)
 
-    val ir2description = buildDescriptions(classes)
-    ir2description.forEach { (klass, descr) ->
-        val name = klass.defaultType.classFqName?.asString() ?: "null"
-        val dependencies = descr.dependencies.map { it.name }
-        val supertypes = descr.superTypes.map { it.name }
+    val ir2description = buildDescriptions(classes).onEach { (_, description) ->
+        if (description.isBasic) {
+            description.dependencies.clear()
+        }
+    }
 
-        val properties = descr.properties.map { it.name }
-        val functions = descr.functions.map { (parameters, returnType) ->
-            "(" + parameters.joinToString { it.name } + ") -> " + returnType.name
+    ir2description.forEach { (_, description) ->
+        removeLoops(description)
+    }
+
+    renderTypesDescription(ir2description)
+}
+
+private fun removeLoops(first: ClassDescription) {
+    val grey = mutableListOf<ClassDescription>()
+    val black = mutableListOf<ClassDescription>()
+
+    fun ClassDescription.dfs(from: List<ClassDescription> = emptyList()) {
+        if (grey.any { this === it }) {
+            //remove loop
+            val previous = from.last()
+            previous.dependencies.removeIf { it === this }
+            previous.functions.removeIf { function -> function.first.any { it === this } || function.second === this }
+            previous.properties.removeIf { it === this }
+            previous.superTypes.removeIf { it === this }
+
+            return
         }
 
-        val basic = if (descr.isBasic) "(is basic) " else ""
-        println("$name $basic--> \n\tdependencies: $dependencies \n\tsupertypes:   $supertypes \n\tproperties:   $properties \n\tfunctions:    $functions")
+        if (black.any { this === it }) {
+            return
+        }
+
+        grey += this
+        listOf(*dependencies.toTypedArray()).forEach { it.dfs(from + this) }
+        grey.removeAt(grey.size - 1)
+        black += this
     }
+
+    first.dfs()
 }
 
 data class ClassDescription(
@@ -140,4 +166,20 @@ private fun IrProperty.getType(): IrType {
 private fun IrType.getClass(): IrClass? {
     //NOTE: return `null` for generic type
     return classifierOrNull!!.owner as? IrClass
+}
+
+private fun renderTypesDescription(ir2description: Map<IrClass, ClassDescription>) {
+    ir2description.forEach { (klass, description) ->
+        val name = klass.defaultType.classFqName?.asString() ?: "null"
+        val dependencies = description.dependencies.map { it.name }
+        val supertypes = description.superTypes.map { it.name }
+
+        val properties = description.properties.map { it.name }
+        val functions = description.functions.map { (parameters, returnType) ->
+            "(" + parameters.joinToString { it.name } + ") -> " + returnType.name
+        }
+
+        val basic = if (description.isBasic) "(is basic) " else ""
+        println("$name $basic--> \n\tdependencies: $dependencies \n\tsupertypes:   $supertypes \n\tproperties:   $properties \n\tfunctions:    $functions")
+    }
 }
