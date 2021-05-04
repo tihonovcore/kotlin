@@ -6,6 +6,8 @@ plugins {
 }
 
 dependencies {
+    testImplementation("com.google.code.gson:gson:2.8.6")
+
     testApi(project(":compiler:fir:entrypoint"))
     testApi(project(":compiler:cli"))
     testImplementation(project(":compiler:ir.tree.impl"))

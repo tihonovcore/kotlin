@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.test.backend.handlers
 
+import com.google.gson.Gson
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.ObsoleteDescriptorBasedAPI
 import org.jetbrains.kotlin.ir.declarations.IrClass
@@ -57,6 +58,8 @@ fun extractTypeGraph(irFiles: List<IrFile>) = irFiles.forEach { file ->
     }
 
     renderTypesDescription(functionDescriptions, class2description)
+
+    createDatasetJson(functionDescriptions, class2description)
 }
 
 private fun removeLoops(first: ClassDescription) {
@@ -229,4 +232,63 @@ private fun renderTypesDescription(functionDescriptions: List<FunctionDescriptio
         val basic = if (description.isBasic) "(is basic) " else ""
         println("$name $basic--> \n\tdependencies: $dependencies \n\tsupertypes:   $supertypes \n\tproperties:   $properties \n\tfunctions:    $functions")
     }
+}
+
+data class JsonClassDescription(
+    val id: Int,
+    val name: String,
+    val isBasic: Boolean,
+    val superTypes: Set<Int>,
+    val properties: List<Int>,
+    val functions: List<JsonFunctionDescription>,
+    val dependencies: Set<Int>,
+)
+
+data class JsonFunctionDescription(
+    val parameters: List<Int>,
+    val returnType: Int,
+    val dependencies: Set<Int>,
+)
+
+private fun createDatasetJson(functionDescriptions: List<FunctionDescription>, class2description: Map<IrClass, ClassDescription>) {
+    val ids = mutableListOf<ClassDescription>()
+    class2description.forEach { (_, description) ->
+        ids += description
+    }
+
+    fun id(description: ClassDescription): Int {
+        return ids.indexOfFirst { it === description }
+    }
+
+    val classes = mutableListOf<JsonClassDescription>()
+    class2description.forEach { (_, description) ->
+        classes += JsonClassDescription(
+            id(description),
+            description.name,
+            description.isBasic,
+            description.superTypes.map { id(it) }.toHashSet(),
+            description.properties.map { id(it) },
+            description.functions.map { (parameters, returnType) ->
+                val intParameters = parameters.map { id(it) }
+                val intReturnType = id(returnType)
+                JsonFunctionDescription(intParameters, intReturnType, (intParameters + intReturnType).toHashSet())
+            },
+            description.dependencies.map { id(it) }.toHashSet()
+        )
+    }
+
+    val functions = functionDescriptions.map { function ->
+        JsonFunctionDescription(
+            function.parameters.map { id(it) },
+            id(function.returnType),
+            function.dependencies.map { id(it) }.toHashSet()
+        )
+    }
+
+    val c = Gson().toJson(classes)
+    val f = Gson().toJson(functions)
+
+    println(c)
+    println()
+    println(f)
 }
