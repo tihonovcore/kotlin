@@ -1,6 +1,37 @@
 // FIR_IDENTICAL
 // WITH_RUNTIME
 
+object Obj {
+    val t: Int
+    val o: Obj = this
+}
+
+//NOTE: all enums enherits kotlin.Enum and hasn't differences
+enum class EEENum { E1, E2, E3, E4 }
+
+//NOTE: Inner and nested classes are considered as top-level classes
+//
+//Expected solution is
+// 1. move constructors of nested class to outer's companion
+// 2. move constructors of inner class to outer's body
+class Outer(val x: Int) {
+    fun foo(a: A) = EEENum.E1
+
+    //(Char) -> Inner
+    inner class Inner(val y: Char) {
+        val t = (x + y.toInt()).toString()
+
+        fun bar(a: A) = foo(a)
+    }
+
+    class NotInner()
+}
+
+val x = Outer.NotInner()
+
+//NOTE: nullable types have not supported: its the same as not-nullable
+fun nullable(a: Int?, b: Char?): Any? = null
+
 fun topLevel(a: Int, b: Long): Char {
     fun inner(c: A, d: B): Unit {
 

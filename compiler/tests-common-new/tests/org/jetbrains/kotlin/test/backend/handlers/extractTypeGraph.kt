@@ -8,10 +8,7 @@ package org.jetbrains.kotlin.test.backend.handlers
 import com.google.gson.Gson
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.ObsoleteDescriptorBasedAPI
-import org.jetbrains.kotlin.ir.declarations.IrClass
-import org.jetbrains.kotlin.ir.declarations.IrFile
-import org.jetbrains.kotlin.ir.declarations.IrFunction
-import org.jetbrains.kotlin.ir.declarations.IrProperty
+import org.jetbrains.kotlin.ir.declarations.*
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.classifierOrNull
@@ -20,6 +17,8 @@ import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid
 import org.jetbrains.kotlin.resolve.DescriptorUtils
+import java.nio.file.Files
+import java.nio.file.Paths
 
 fun extractTypeGraph(irFiles: List<IrFile>) = irFiles.forEach { file ->
     val classes = mutableListOf<IrClass>()
@@ -59,7 +58,7 @@ fun extractTypeGraph(irFiles: List<IrFile>) = irFiles.forEach { file ->
 
     renderTypesDescription(functionDescriptions, class2description)
 
-    createDatasetJson(functionDescriptions, class2description)
+    createDatasetJson(file.name, functionDescriptions, class2description)
 }
 
 private fun removeLoops(first: ClassDescription) {
@@ -250,7 +249,11 @@ data class JsonFunctionDescription(
     val dependencies: Set<Int>,
 )
 
-private fun createDatasetJson(functionDescriptions: List<FunctionDescription>, class2description: Map<IrClass, ClassDescription>) {
+private fun createDatasetJson(
+    fileName: String,
+    functionDescriptions: List<FunctionDescription>,
+    class2description: Map<IrClass, ClassDescription>
+) {
     val ids = mutableListOf<ClassDescription>()
     class2description.forEach { (_, description) ->
         ids += description
@@ -288,7 +291,7 @@ private fun createDatasetJson(functionDescriptions: List<FunctionDescription>, c
     val c = Gson().toJson(classes)
     val f = Gson().toJson(functions)
 
-    println(c)
-    println()
-    println(f)
+    val dataset = Paths.get("/home/tihonovcore/diploma/kotlin/compiler/tests-common-new/tests/org/jetbrains/kotlin/test/backend/handlers/dataset")
+    val path = Files.createTempFile(dataset, fileName, ".json")
+    path.toFile().writeText(text = "{\n    \"classes\":$c,\n    \"functions\":$f\n}")
 }

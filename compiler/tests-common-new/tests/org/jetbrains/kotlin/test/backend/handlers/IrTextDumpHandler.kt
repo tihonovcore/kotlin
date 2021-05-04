@@ -63,21 +63,20 @@ class IrTextDumpHandler(testServices: TestServices) : AbstractIrHandler(testServ
         val irFiles = info.backendInput.irModuleFragment.files
 
         extractTypeGraph(irFiles)
-        exitProcess(0)
 
-        val testFileToIrFile = irFiles.groupWithTestFiles(module)
-        val builder = baseDumper.builderForModule(module)
-        for ((testFile, irFile) in testFileToIrFile) {
-            if (EXTERNAL_FILE in testFile.directives) continue
-            val actualDump = irFile.dumpTreesFromLineNumber(lineNumber = 0, normalizeNames = true)
-            builder.append(actualDump)
-            verify(irFile)
-
-            val irFileCopy = irFile.deepCopyWithSymbols()
-            val dumpOfCopy = irFileCopy.dumpTreesFromLineNumber(lineNumber = 0, normalizeNames = true)
-            assertions.assertEquals(actualDump, dumpOfCopy) { "IR dump mismatch after deep copy with symbols" }
-        }
-        compareDumpsOfExternalClasses(module, info)
+    //        val testFileToIrFile = irFiles.groupWithTestFiles(module)
+//        val builder = baseDumper.builderForModule(module)
+//        for ((testFile, irFile) in testFileToIrFile) {
+//            if (EXTERNAL_FILE in testFile.directives) continue
+//            val actualDump = irFile.dumpTreesFromLineNumber(lineNumber = 0, normalizeNames = true)
+//            builder.append(actualDump)
+//            verify(irFile)
+//
+//            val irFileCopy = irFile.deepCopyWithSymbols()
+//            val dumpOfCopy = irFileCopy.dumpTreesFromLineNumber(lineNumber = 0, normalizeNames = true)
+//            assertions.assertEquals(actualDump, dumpOfCopy) { "IR dump mismatch after deep copy with symbols" }
+//        }
+//        compareDumpsOfExternalClasses(module, info)
     }
 
     private fun compareDumpsOfExternalClasses(module: TestModule, info: IrBackendInput) {
