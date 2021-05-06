@@ -44,6 +44,7 @@ fun createSamplesForDataset(
             StringDatasetSample(
                 getLeafPaths(targetElement.parent, targetIndex).unbox().map { path -> path.toDatasetStyle(range2type) },
                 getRootPath(targetElement.parent).unbox().toDatasetStyle(range2type),
+                targetElement.parent.children.take(targetIndex).map { it.original.kind() },
                 targetIndex,
                 targetElement.original.kind()
             )
@@ -66,6 +67,7 @@ fun createSampleForPredict(
             StringDatasetSample(
                 getLeafPaths(wrappedFrom!!, targetIndex).unbox().map { path -> path.toDatasetStyle(range2type) },
                 getRootPath(wrappedFrom).unbox().toDatasetStyle(range2type),
+                wrappedFrom.children.map { it.original.kind() },
                 targetIndex
             )
         }

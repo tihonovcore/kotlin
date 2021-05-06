@@ -59,7 +59,7 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             if (!useTypes) range2type.clear()
 
             try {
-                val samples = createSamplesForDataset(sourceKtFile, range2type, 5..25, 10).skipTooBig()
+                val samples = createSamplesForDataset(sourceKtFile, range2type, 5..25, 25).skipTooBig()
                 output.appendText(samples.json() + System.lineSeparator())
             } catch (e: Exception) {
                 println(file.absolutePath)
@@ -178,6 +178,7 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
                 IntegerDatasetSample(
                     sample.leafPaths.map { path -> path.map { node -> string2integer[node]!! } },
                     sample.rootPath.map { node -> string2integer[node]!! },
+                    sample.leftBrothers.map { node -> string2integer[node]!! },
                     sample.indexAmongBrothers,
                     string2integer[sample.target]
                 )

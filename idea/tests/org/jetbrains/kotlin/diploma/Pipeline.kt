@@ -71,6 +71,7 @@ class Pipeline(project: Project) {
             IntegerDatasetSample(
                 sample.leafPaths.map { path -> path.map { node -> string2integer[node]!!.asInt } },
                 sample.rootPath.map { node -> string2integer[node]!!.asInt },
+                sample.leftBrothers.map { node -> string2integer[node]!!.asInt },
                 sample.indexAmongBrothers,
                 444 //TODO: unused, but model expects
             )
