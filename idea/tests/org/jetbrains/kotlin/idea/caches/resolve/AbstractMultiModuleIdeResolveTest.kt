@@ -18,6 +18,7 @@ import org.jetbrains.kotlin.checkers.utils.CheckerTestUtil
 import org.jetbrains.kotlin.checkers.utils.DiagnosticsRenderingConfiguration
 import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.diploma.*
+import org.jetbrains.kotlin.diploma.analysis.*
 import org.jetbrains.kotlin.idea.codeInsight.ReferenceVariantsHelper
 import org.jetbrains.kotlin.idea.core.util.toVirtualFile
 import org.jetbrains.kotlin.idea.project.KotlinMultiplatformAnalysisModeComponent
@@ -362,6 +363,20 @@ class PathExtractor : AbstractMultiModuleIdeResolveTest() {
         File(integerDatasetDirectory).mkdirs()
         File("$integerDatasetDirectory/string2integer.json").writeText(string2integer.json())
         File("$integerDatasetDirectory/integer2string.json").writeText(integer2string.json())
+    }
+
+    @TestMetadata("extractTypes")
+    fun testExtractTypes() {
+        File(sourceCodeDirectory).walkTopDown().forEach { file ->
+            if (file.mustBeSkipped()) return@forEach
+            println(file.path)
+
+            val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
+            val ok = extractTypes(sourceKtFile)
+
+            println(ok)
+            println()
+        }
     }
 
     @TestMetadata("createDataset")
