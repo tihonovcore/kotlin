@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.diploma.analysis
 
+import com.google.gson.Gson
 import org.jetbrains.kotlin.descriptors.ClassifierDescriptor
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.descriptors.PropertyDescriptor
@@ -35,9 +36,17 @@ fun extractTypes(file: KtFile): String {
         }
     }, null)
 
-    val (functionDescriptions, class2description) = buildSpecifications(classes, functions)
+    val (functionSpecs, class2spec) = buildSpecifications(classes, functions)
 
-    return ""
+    class2spec.forEach { (_, specification) ->
+        if (specification.isBasic) {
+            specification.dependencies.clear()
+        }
+    }
+
+    removeLoops(class2spec)
+
+    return convertToJson(functionSpecs, class2spec)
 }
 
 private fun buildSpecifications(classes: List<ClassifierDescriptor>, functions: List<FunctionDescriptor>): Pair<List<FunctionSpec>, Map<ClassifierDescriptor, ClassSpec>> {
@@ -117,3 +126,78 @@ private fun String.isBasic(): Boolean {
     )
 }
 
+private fun removeLoops(class2spec: Map<ClassifierDescriptor, ClassSpec>) {
+    val grey = mutableListOf<ClassSpec>()
+    val black = mutableListOf<ClassSpec>()
+
+    fun ClassSpec.dfs(path: List<ClassSpec> = emptyList()) {
+        if (grey.any { this === it }) {
+            //remove loop
+            val previous = path.last()
+            previous.dependencies.removeIf { it === this }
+            previous.functions.removeIf { function -> function.dependencies.any { it === this } }
+            previous.properties.removeIf { it === this }
+            previous.superTypes.removeIf { it === this }
+
+            return
+        }
+
+        if (black.any { this === it }) {
+            return
+        }
+
+        grey += this
+        listOf(*dependencies.toTypedArray()).forEach { it.dfs(path = path + this) }
+        grey.removeAt(grey.size - 1)
+        black += this
+    }
+
+    class2spec.forEach { (_, specification) ->
+        specification.dfs()
+    }
+}
+
+private fun convertToJson(
+    functionSpecifications: List<FunctionSpec>,
+    class2spec: Map<ClassifierDescriptor, ClassSpec>
+): String {
+    val ids = mutableListOf<ClassSpec>()
+    class2spec.forEach { (_, specification) ->
+        ids += specification
+    }
+
+    fun id(specification: ClassSpec): Int {
+        return ids.indexOfFirst { it === specification }
+    }
+
+    val classes = mutableListOf<JsonClassSpec>()
+    class2spec.forEach { (_, description) ->
+        classes += JsonClassSpec(
+            id(description),
+            description.name,
+            description.isBasic,
+            description.superTypes.map { id(it) }.toHashSet(),
+            description.properties.map { id(it) },
+            description.functions.map { function ->
+                val intParameters = function.parameters.map { id(it) }
+                val intReturnType = id(function.returnType)
+                val intDependencies = function.dependencies.map { id(it) }.toHashSet()
+                JsonFunctionSpec(intParameters, intReturnType, intDependencies)
+            },
+            description.dependencies.map { id(it) }.toHashSet()
+        )
+    }
+
+    val functions = functionSpecifications.map { function ->
+        JsonFunctionSpec(
+            function.parameters.map { id(it) },
+            id(function.returnType),
+            function.dependencies.map { id(it) }.toHashSet()
+        )
+    }
+
+    val c = Gson().toJson(classes)
+    val f = Gson().toJson(functions)
+
+    return "{\n    \"classes\":$c,\n    \"functions\":$f\n}"
+}
