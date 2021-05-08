@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.diploma.analysis
 
 import com.google.gson.Gson
 import org.jetbrains.kotlin.descriptors.ClassifierDescriptor
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.descriptors.PropertyDescriptor
 import org.jetbrains.kotlin.idea.refactoring.fqName.fqName
@@ -50,7 +51,6 @@ fun extractTypes(file: KtFile): String {
 }
 
 private fun buildSpecifications(classes: List<ClassifierDescriptor>, functions: List<FunctionDescriptor>): Pair<List<FunctionSpec>, Map<ClassifierDescriptor, ClassSpec>> {
-    //TODO: skip private/protected
     val class2description = mutableMapOf<ClassifierDescriptor, ClassSpec>()
     val functionDescriptions = functions.mapNotNull { function -> function.toSpecification(class2description) }
     classes.forEach { klass -> klass.toSpecification(class2description) }
@@ -66,13 +66,14 @@ private fun ClassifierDescriptor.toSpecification(class2spec: MutableMap<Classifi
     class2spec[this] = specification
 
     val supertypeDependencies = defaultType
-        .supertypes() //TODO: is transitive??
+        .supertypes()
         .mapNotNull { it.constructor.declarationDescriptor }
         .map { it.toSpecification(class2spec) }
 
     val properties = defaultType.memberScope
         .getDescriptorsFiltered { true }
         .filterIsInstance(PropertyDescriptor::class.java)
+        .filter { it.visibility !== DescriptorVisibilities.PRIVATE && it.visibility !== DescriptorVisibilities.PROTECTED }
         .filter { it.overriddenDescriptors.isEmpty() }
         .mapNotNull { it.type.constructor.declarationDescriptor }
         .map { it.toSpecification(class2spec) }
@@ -80,6 +81,7 @@ private fun ClassifierDescriptor.toSpecification(class2spec: MutableMap<Classifi
     val functions = defaultType.memberScope
         .getDescriptorsFiltered { true }
         .filterIsInstance(FunctionDescriptor::class.java)
+        .filter { it.visibility !== DescriptorVisibilities.PRIVATE && it.visibility !== DescriptorVisibilities.PROTECTED }
         .filter { it.overriddenDescriptors.isEmpty() }
         .mapNotNull { it.toSpecification(class2spec) }
 
