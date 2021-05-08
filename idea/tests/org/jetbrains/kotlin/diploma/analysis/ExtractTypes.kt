@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.descriptors.PropertyDescriptor
 import org.jetbrains.kotlin.idea.refactoring.fqName.fqName
 import org.jetbrains.kotlin.idea.search.usagesSearch.descriptor
 import org.jetbrains.kotlin.psi.*
+import org.jetbrains.kotlin.psi.psiUtil.containingClassOrObject
 import org.jetbrains.kotlin.resolve.scopes.getDescriptorsFiltered
 import org.jetbrains.kotlin.types.typeUtil.supertypes
 
@@ -22,7 +23,12 @@ fun extractTypes(file: KtFile): String {
         override fun visitKtElement(element: KtElement) {
             when (element) {
                 is KtClass -> classes += element.descriptor as ClassifierDescriptor
-                is KtFunction -> functions += element.descriptor as FunctionDescriptor
+                is KtConstructor<*> -> element.descriptor as FunctionDescriptor
+                is KtFunction -> {
+                    if (element.containingClassOrObject == null) {
+                        functions += element.descriptor as FunctionDescriptor
+                    }
+                }
             }
 
             element.acceptChildren(this, null)
@@ -62,24 +68,38 @@ private fun ClassifierDescriptor.toSpecification(class2spec: MutableMap<Classifi
         .mapNotNull { it.type.constructor.declarationDescriptor }
         .map { it.toSpecification(class2spec) }
 
+    val functions = defaultType.memberScope
+        .getDescriptorsFiltered { true }
+        .filterIsInstance(FunctionDescriptor::class.java)
+        .filter { it.overriddenDescriptors.isEmpty() }
+        .mapNotNull { it.toSpecification(class2spec) }
+
     specification.superTypes += supertypeDependencies
     specification.properties += properties
-//    specification.functions += functions
+    specification.functions += functions
 
     specification.dependencies += supertypeDependencies
     specification.dependencies += properties
-//    specification.dependencies += functions.flatMap { (parameters, returnType) -> parameters + returnType }
+    specification.dependencies += functions.flatMap { it.dependencies }
 
     return specification
 }
 
 private fun FunctionDescriptor.toSpecification(class2spec: MutableMap<ClassifierDescriptor, ClassSpec>): FunctionSpec? {
-    return null
-}
+    val descriptorsForParameters = valueParameters.map { it.type.constructor.declarationDescriptor }
+    val descriptorForReturnType = returnType?.constructor?.declarationDescriptor
 
-//private fun KotlinType.getClass(): KtClass {
-//    constructor.declarationDescriptor!!.
-//}
+    if (descriptorsForParameters.any { it == null } || descriptorForReturnType == null) return null
+
+    val specificationsForParameters = descriptorsForParameters.map { it!!.toSpecification(class2spec) }
+    val specificationForReturnType = descriptorForReturnType.toSpecification(class2spec)
+
+    return FunctionSpec(
+        specificationsForParameters,
+        specificationForReturnType,
+        dependencies = specificationsForParameters + specificationForReturnType
+    )
+}
 
 private fun String.isBasic(): Boolean {
     return this in listOf(

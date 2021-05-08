@@ -16,7 +16,7 @@ data class ClassSpec(
     val isBasic: Boolean,
     val superTypes: MutableList<ClassSpec> = mutableListOf(),
     val properties: MutableList<ClassSpec> = mutableListOf(),
-    val functions: MutableList<Pair<List<ClassSpec>, ClassSpec>> = mutableListOf(), //use FunctionDescription?
+    val functions: MutableList<FunctionSpec> = mutableListOf(),
     val dependencies: MutableList<ClassSpec> = mutableListOf(),
 )
 
