@@ -33,6 +33,7 @@ import org.jetbrains.kotlin.test.KotlinTestUtils
 import org.jetbrains.kotlin.test.TestMetadata
 import java.io.File
 import java.lang.System.exit
+import java.nio.file.Files
 import java.nio.file.Paths
 
 abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
@@ -332,9 +333,11 @@ abstract class AbstractMultiplatformAnalysisTest : AbstractDiagnosticCodeMetaInf
 class PathExtractor : AbstractMultiModuleIdeResolveTest() {
     override fun getTestDataPath(): String = PluginTestCaseBase.getTestDataPathBase()
 
-    val sourceCodeDirectory = "/home/tihonovcore/diploma/kotlin/compiler/testData/codegen/box"
-    val stringDatasetDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/string"
-    val integerDatasetDirectory = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/integer"
+    private val root = "/home/tihonovcore/diploma"
+    val sourceCodeDirectory = "$root/kotlin/compiler/testData/codegen/box"
+    val stringDatasetDirectory = "$root/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/string"
+    val integerDatasetDirectory = "$root/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/integer"
+    val typesDatasetDirectory = "$root/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/types"
 
     @TestMetadata("createMapping")
     fun testCreateMapping() {
@@ -367,15 +370,16 @@ class PathExtractor : AbstractMultiModuleIdeResolveTest() {
 
     @TestMetadata("extractTypes")
     fun testExtractTypes() {
+        File(typesDatasetDirectory).listFiles()!!.forEach { it.delete() }
+
         File(sourceCodeDirectory).walkTopDown().forEach { file ->
             if (file.mustBeSkipped()) return@forEach
             println(file.path)
 
             val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
-            val ok = extractTypes(sourceKtFile)
-
-            println(ok)
-            println()
+            val json = extractTypes(sourceKtFile)
+            val path = Files.createTempFile(Paths.get(typesDatasetDirectory), file.name, ".json")
+            path.toFile().writeText(json)
         }
     }
 
