@@ -16,6 +16,7 @@ import org.jetbrains.kotlin.checkers.ReferenceVariantsProvider
 import org.jetbrains.kotlin.checkers.diagnostics.factories.DebugInfoDiagnosticFactory1
 import org.jetbrains.kotlin.checkers.utils.CheckerTestUtil
 import org.jetbrains.kotlin.checkers.utils.DiagnosticsRenderingConfiguration
+import org.jetbrains.kotlin.checkers.utils.ExtractedType
 import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.diploma.*
 import org.jetbrains.kotlin.diploma.analysis.*
@@ -272,6 +273,7 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             )
         )
 
+        val extractedTypes = mutableListOf<ExtractedType>()
         val actualDiagnostics = CheckerTestUtil.getDiagnosticsIncludingSyntaxErrors(
             bindingContext,
             file,
@@ -283,19 +285,22 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
                 languageVersionSettings = resolutionFacade.getLanguageVersionSettings(),
             ),
             dataFlowValueFactory = resolutionFacade.getDataFlowValueFactory(),
-            moduleDescriptor = moduleDescriptor as ModuleDescriptorImpl
+            moduleDescriptor = moduleDescriptor as ModuleDescriptorImpl,
+            extractedTypes = extractedTypes
         ).filter { diagnosticsFilter.value(it.diagnostic) }
 
-        val actualTextWithDiagnostics = CheckerTestUtil.addDiagnosticMarkersToText(
-            file,
-            actualDiagnostics,
-            diagnosticToExpectedDiagnostic = emptyMap(),
-            getFileText = { it.text },
-            uncheckedDiagnostics = emptyList(),
-            withNewInferenceDirective = false,
-            renderDiagnosticMessages = true,
-            range2type
-        ).toString()
+        println()
+
+//        val actualTextWithDiagnostics = CheckerTestUtil.addDiagnosticMarkersToText(
+//            file,
+//            actualDiagnostics,
+//            diagnosticToExpectedDiagnostic = emptyMap(),
+//            getFileText = { it.text },
+//            uncheckedDiagnostics = emptyList(),
+//            withNewInferenceDirective = false,
+//            renderDiagnosticMessages = true,
+//            range2type
+//        ).toString()
 
 //        fun write(suffix: String, text: String) {
 //            val outputDirName = expectedFile.parentFile.absolutePath

@@ -115,7 +115,8 @@ object CheckerTestUtil {
         configuration: DiagnosticsRenderingConfiguration,
         dataFlowValueFactory: DataFlowValueFactory?,
         moduleDescriptor: ModuleDescriptorImpl?,
-        diagnosedRanges: MutableMap<IntRange, MutableSet<String>>? = null
+        diagnosedRanges: MutableMap<IntRange, MutableSet<String>>? = null,
+        extractedTypes: MutableList<ExtractedType> = mutableListOf()
     ) = getDebugInfoDiagnostics(
         root,
         bindingContext,
@@ -124,7 +125,8 @@ object CheckerTestUtil {
         configuration,
         dataFlowValueFactory,
         moduleDescriptor,
-        diagnosedRanges
+        diagnosedRanges,
+        extractedTypes
     )
 
     fun getDebugInfoDiagnostics(
@@ -135,7 +137,8 @@ object CheckerTestUtil {
         configuration: DiagnosticsRenderingConfiguration,
         dataFlowValueFactory: DataFlowValueFactory?,
         moduleDescriptor: ModuleDescriptorImpl?,
-        diagnosedRanges: Map<IntRange, MutableSet<String>>?
+        diagnosedRanges: Map<IntRange, MutableSet<String>>?,
+        extractedTypes: MutableList<ExtractedType>
     ): MutableList<ActualDiagnostic> {
         val debugAnnotations = mutableListOf<ActualDiagnostic>()
 
@@ -160,7 +163,7 @@ object CheckerTestUtil {
 
         renderDiagnosticsByFactoryList(
             factoryListForDiagnosticsOnExpression, root, bindingContext, configuration,
-            dataFlowValueFactory, moduleDescriptor, diagnosedRanges, debugAnnotations
+            dataFlowValueFactory, moduleDescriptor, diagnosedRanges, debugAnnotations, extractedTypes = extractedTypes
         )
 
         return debugAnnotations
@@ -175,7 +178,8 @@ object CheckerTestUtil {
         moduleDescriptor: ModuleDescriptorImpl?,
         diagnosedRanges: Map<IntRange, MutableSet<String>>?,
         debugAnnotations: MutableList<ActualDiagnostic>,
-        toExpression: (T) -> KtExpression? = { it as? KtExpression }
+        toExpression: (T) -> KtExpression? = { it as? KtExpression },
+        extractedTypes: MutableList<ExtractedType> = mutableListOf()
     ) {
         for ((context, factory) in factoryList) {
             for ((element, _) in bindingContext.getSliceContents(context)) {
@@ -185,6 +189,9 @@ object CheckerTestUtil {
                     root, bindingContext, configuration, dataFlowValueFactory, moduleDescriptor, diagnosedRanges,
                     debugAnnotations
                 )
+
+                extractedTypes += factory.extractedTypes
+                factory.extractedTypes.clear()
             }
         }
     }
