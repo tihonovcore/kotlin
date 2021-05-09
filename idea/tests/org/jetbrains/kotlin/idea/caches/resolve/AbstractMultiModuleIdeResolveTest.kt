@@ -382,7 +382,7 @@ class PathExtractor : AbstractMultiModuleIdeResolveTest() {
             println(file.path)
 
             val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
-            val json = extractTypes(sourceKtFile)
+            val json = extractTypes(sourceKtFile).convertToJson()
             val path = Files.createTempFile(Paths.get(typesDatasetDirectory), file.name, ".json")
             path.toFile().writeText(json)
         }

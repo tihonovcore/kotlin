@@ -17,7 +17,7 @@ import org.jetbrains.kotlin.psi.psiUtil.containingClassOrObject
 import org.jetbrains.kotlin.resolve.scopes.getDescriptorsFiltered
 import org.jetbrains.kotlin.types.typeUtil.supertypes
 
-fun extractTypes(file: KtFile): String {
+fun extractTypes(file: KtFile): Pair<List<JsonFunctionSpec>, Map<ClassifierDescriptor, JsonClassSpec>> {
     val classes = mutableListOf<ClassifierDescriptor>()
     val functions = mutableListOf<FunctionDescriptor>()
 
@@ -47,7 +47,7 @@ fun extractTypes(file: KtFile): String {
 
     removeLoops(class2spec)
 
-    return convertToJson(functionSpecs, class2spec)
+    return Pair(functionSpecs, class2spec).withIntSpecification()
 }
 
 private fun buildSpecifications(classes: List<ClassifierDescriptor>, functions: List<FunctionDescriptor>): Pair<List<FunctionSpec>, Map<ClassifierDescriptor, ClassSpec>> {
@@ -159,12 +159,9 @@ private fun removeLoops(class2spec: Map<ClassifierDescriptor, ClassSpec>) {
     }
 }
 
-private fun convertToJson(
-    functionSpecifications: List<FunctionSpec>,
-    class2spec: Map<ClassifierDescriptor, ClassSpec>
-): String {
+fun Pair<List<FunctionSpec>, Map<ClassifierDescriptor, ClassSpec>>.withIntSpecification(): Pair<List<JsonFunctionSpec>, Map<ClassifierDescriptor, JsonClassSpec>> {
     val ids = mutableListOf<ClassSpec>()
-    class2spec.forEach { (_, specification) ->
+    second.forEach { (_, specification) ->
         ids += specification
     }
 
@@ -172,9 +169,9 @@ private fun convertToJson(
         return ids.indexOfFirst { it === specification }
     }
 
-    val classes = mutableListOf<JsonClassSpec>()
-    class2spec.forEach { (_, description) ->
-        classes += JsonClassSpec(
+    val classes = mutableMapOf<ClassifierDescriptor, JsonClassSpec>()
+    second.forEach { (classifier, description) ->
+        classes[classifier] = JsonClassSpec(
             id(description),
             description.name,
             description.isBasic,
@@ -190,7 +187,7 @@ private fun convertToJson(
         )
     }
 
-    val functions = functionSpecifications.map { function ->
+    val functions = first.map { function ->
         JsonFunctionSpec(
             function.parameters.map { id(it) },
             id(function.returnType),
@@ -198,8 +195,12 @@ private fun convertToJson(
         )
     }
 
-    val c = Gson().toJson(classes)
-    val f = Gson().toJson(functions)
+    return Pair(functions, classes)
+}
+
+fun Pair<List<JsonFunctionSpec>, Map<ClassifierDescriptor, JsonClassSpec>>.convertToJson(): String {
+    val f = Gson().toJson(first)
+    val c = Gson().toJson(second.values.sortedBy { it.id })
 
     return "{\n    \"classes\":$c,\n    \"functions\":$f\n}"
 }
