@@ -7,6 +7,9 @@ package org.jetbrains.kotlin.diploma
 
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
+import org.jetbrains.kotlin.checkers.utils.ExtractedType
+import org.jetbrains.kotlin.descriptors.ClassifierDescriptor
+import org.jetbrains.kotlin.diploma.analysis.JsonClassSpec
 import org.jetbrains.kotlin.psi.KtElement
 import kotlin.random.Random
 
@@ -30,7 +33,8 @@ class AstWithAfterLast(
 
 fun createSamplesForDataset(
     root: PsiElement,
-    range2type: Map<TextRange, String>,
+    class2spec: Map<ClassifierDescriptor, JsonClassSpec>,
+    extractedTypes: List<ExtractedType>,
     depth: IntRange,
     samplesCount: Int
 ): List<StringDatasetSample> {
@@ -44,8 +48,8 @@ fun createSamplesForDataset(
             val leafPaths = getLeafPaths(targetElement.parent, targetIndex).unbox()
             val rootPath = getRootPath(targetElement.parent).unbox()
             StringDatasetSample(
-                leafPaths = leafPaths.map { path -> path.toDatasetStyle(range2type) },
-                rootPath = rootPath.toDatasetStyle(range2type),
+                leafPaths = leafPaths.map { path -> path.toDatasetStyle() },
+                rootPath = rootPath.toDatasetStyle(),
                 leftBrothers = targetElement.parent.children.take(targetIndex).map { it.original.kind() },
                 indexAmongBrothers = targetIndex,
                 target = targetElement.original.kind()
@@ -57,7 +61,8 @@ fun createSampleForPredict(
     root: PsiElement,
     from: PsiElement,
     notFinished: List<KtElement>,
-    range2type: Map<TextRange, String> = emptyMap()
+    class2spec: Map<ClassifierDescriptor, JsonClassSpec>,
+    extractedTypes: List<ExtractedType>,
 ): StringDatasetSample {
     val targetIndex = from.children.size
 
@@ -70,8 +75,8 @@ fun createSampleForPredict(
             val rootPath = getRootPath(wrappedFrom).unbox()
 
             StringDatasetSample(
-                leafPaths = leafPaths.map { path -> path.toDatasetStyle(range2type) },
-                rootPath = rootPath.toDatasetStyle(range2type),
+                leafPaths = leafPaths.map { path -> path.toDatasetStyle() },
+                rootPath = rootPath.toDatasetStyle(),
                 leftBrothers = wrappedFrom.children.map { it.original.kind() },
                 indexAmongBrothers = targetIndex
             )

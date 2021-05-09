@@ -46,7 +46,7 @@ class Pipeline(project: Project) {
             }
 
             try {
-                val jsonDatasetSample = createSampleForPredict(file, current, notFinished).json()
+                val jsonDatasetSample = createSampleForPredict(file, current, notFinished, emptyMap(), emptyList()).json()
                 val predictedNode = predictNode(jsonDatasetSample.toIntegerDatasetSample())
                 val newChild = current.append(decoder.decode(predictedNode))
                 newChild.children.forEach { it.delete() }

@@ -117,7 +117,7 @@ class PathExtractionTest : DiplomaTests() {
         }
         path += file
 
-        val (actualLeafPaths, actualRootPath, actualIndexAmongBrothers, _) = createSampleForPredict(file, from, path)
+        val (actualLeafPaths, actualRootPath, actualIndexAmongBrothers, _) = createSampleForPredict(file, from, path, emptyMap())
 
         val expectedLeafPaths = load("createSampleForPredict_leafPaths.txt")
         val expectedRootPath = load("createSampleForPredict_rootPath.txt").single().split(" ")

@@ -58,11 +58,11 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             println(file.path)
 
             val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
-            val range2type = checkFile(sourceKtFile, file)
-            if (!useTypes) range2type.clear()
+            val (_, class2spec) = extractTypes(sourceKtFile)
+            val extractedTypes = checkFile(sourceKtFile, file)
 
             try {
-                val samples = createSamplesForDataset(sourceKtFile, range2type, 5..25, 25).skipTooBig()
+                val samples = createSamplesForDataset(sourceKtFile, class2spec, extractedTypes, 5..25, 25).skipTooBig()
                 output.appendText(samples.json() + System.lineSeparator())
             } catch (e: Exception) {
                 println(file.absolutePath)
