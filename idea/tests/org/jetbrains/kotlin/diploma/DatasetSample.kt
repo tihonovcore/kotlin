@@ -8,6 +8,8 @@ package org.jetbrains.kotlin.diploma
 interface DatasetSample<T> {
     val leafPaths: List<List<T>>
     val rootPath: List<T>
+    val typesForLeafPaths: List<List<Pair<Int, Int>>>
+    val typesForRootPath: List<Pair<Int, Int>>
     val leftBrothers: List<T>
     val indexAmongBrothers: Int
     val target: T?
@@ -16,6 +18,8 @@ interface DatasetSample<T> {
 data class StringDatasetSample(
     override val leafPaths: List<List<String>>,
     override val rootPath: List<String>,
+    override val typesForLeafPaths: List<List<Pair<Int, Int>>> = emptyList(),
+    override val typesForRootPath: List<Pair<Int, Int>> = emptyList(),
     override val leftBrothers: List<String>,
     override val indexAmongBrothers: Int,
     override val target: String? = null
@@ -24,6 +28,8 @@ data class StringDatasetSample(
 data class IntegerDatasetSample(
     override val leafPaths: List<List<Int>>,
     override val rootPath: List<Int>,
+    override val typesForLeafPaths: List<List<Pair<Int, Int>>> = emptyList(),
+    override val typesForRootPath: List<Pair<Int, Int>> = emptyList(),
     override val leftBrothers: List<Int>,
     override val indexAmongBrothers: Int,
     override val target: Int? = null

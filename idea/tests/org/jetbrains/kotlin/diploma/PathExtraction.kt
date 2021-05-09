@@ -41,12 +41,14 @@ fun createSamplesForDataset(
         .map { targetElement ->
             val targetIndex = targetElement.parent!!.children.indexOf(targetElement)
 
+            val leafPaths = getLeafPaths(targetElement.parent, targetIndex).unbox()
+            val rootPath = getRootPath(targetElement.parent).unbox()
             StringDatasetSample(
-                getLeafPaths(targetElement.parent, targetIndex).unbox().map { path -> path.toDatasetStyle(range2type) },
-                getRootPath(targetElement.parent).unbox().toDatasetStyle(range2type),
-                targetElement.parent.children.take(targetIndex).map { it.original.kind() },
-                targetIndex,
-                targetElement.original.kind()
+                leafPaths = leafPaths.map { path -> path.toDatasetStyle(range2type) },
+                rootPath = rootPath.toDatasetStyle(range2type),
+                leftBrothers = targetElement.parent.children.take(targetIndex).map { it.original.kind() },
+                indexAmongBrothers = targetIndex,
+                target = targetElement.original.kind()
             )
         }
 }
@@ -64,11 +66,14 @@ fun createSampleForPredict(
         .also { println(root.text); println(from.kind()); it.renderTree(); println() }
         .findNode(from)
         .let { wrappedFrom ->
+            val leafPaths = getLeafPaths(wrappedFrom!!, targetIndex).unbox()
+            val rootPath = getRootPath(wrappedFrom).unbox()
+
             StringDatasetSample(
-                getLeafPaths(wrappedFrom!!, targetIndex).unbox().map { path -> path.toDatasetStyle(range2type) },
-                getRootPath(wrappedFrom).unbox().toDatasetStyle(range2type),
-                wrappedFrom.children.map { it.original.kind() },
-                targetIndex
+                leafPaths = leafPaths.map { path -> path.toDatasetStyle(range2type) },
+                rootPath = rootPath.toDatasetStyle(range2type),
+                leftBrothers = wrappedFrom.children.map { it.original.kind() },
+                indexAmongBrothers = targetIndex
             )
         }
 }

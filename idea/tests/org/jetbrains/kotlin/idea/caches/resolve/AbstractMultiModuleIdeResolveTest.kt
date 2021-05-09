@@ -181,6 +181,8 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
                 IntegerDatasetSample(
                     sample.leafPaths.map { path -> path.map { node -> string2integer[node]!! } },
                     sample.rootPath.map { node -> string2integer[node]!! },
+                    sample.typesForLeafPaths,
+                    sample.typesForRootPath,
                     sample.leftBrothers.map { node -> string2integer[node]!! },
                     sample.indexAmongBrothers,
                     string2integer[sample.target]
