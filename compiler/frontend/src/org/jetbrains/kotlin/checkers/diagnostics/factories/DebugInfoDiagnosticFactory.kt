@@ -5,7 +5,7 @@
 
 package org.jetbrains.kotlin.checkers.diagnostics.factories
 
-import org.jetbrains.kotlin.checkers.utils.ExtractedType
+import org.jetbrains.kotlin.checkers.utils.TypedNode
 import org.jetbrains.kotlin.config.LanguageVersionSettings
 import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.diagnostics.Diagnostic
@@ -16,7 +16,7 @@ import org.jetbrains.kotlin.resolve.calls.smartcasts.DataFlowValueFactory
 interface DebugInfoDiagnosticFactory {
     val withExplicitDefinitionOnly: Boolean
 
-    val extractedTypes: MutableList<ExtractedType>
+    val typedNodes: MutableList<TypedNode>
 
     fun createDiagnostic(
         expression: KtExpression,

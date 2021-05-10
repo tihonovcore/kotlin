@@ -16,7 +16,7 @@ import org.jetbrains.kotlin.checkers.ReferenceVariantsProvider
 import org.jetbrains.kotlin.checkers.diagnostics.factories.DebugInfoDiagnosticFactory1
 import org.jetbrains.kotlin.checkers.utils.CheckerTestUtil
 import org.jetbrains.kotlin.checkers.utils.DiagnosticsRenderingConfiguration
-import org.jetbrains.kotlin.checkers.utils.ExtractedType
+import org.jetbrains.kotlin.checkers.utils.TypedNode
 import org.jetbrains.kotlin.descriptors.ClassifierDescriptor
 import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.diploma.*
@@ -61,11 +61,12 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             println(file.path)
 
             val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
-            val (_, class2spec) = extractTypes(sourceKtFile)
-            val extractedTypes = checkFile(sourceKtFile, file)
+            val typesFromFile = extractTypes(sourceKtFile)
+            val class2spec = typesFromFile.second
+            val typedNodes = checkFile(sourceKtFile, file)
 
             try {
-                val samples = createSamplesForDataset(sourceKtFile, getMapPsiToTypeId(class2spec, extractedTypes), 5..25, 25).skipTooBig()
+                val samples = createSamplesForDataset(sourceKtFile, getMapPsiToTypeId(class2spec, typedNodes), 5..25, 25).skipTooBig()
                 output.appendText(samples.json() + System.lineSeparator())
             } catch (e: Exception) {
                 println(file.absolutePath)
@@ -80,9 +81,9 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
 
     private fun getMapPsiToTypeId(
         class2spec: Map<ClassifierDescriptor, JsonClassSpec>,
-        extractedTypes: List<ExtractedType>
+        typedNodes: List<TypedNode>
     ): Map<PsiElement, Int> {
-        return extractedTypes.associate {
+        return typedNodes.associate {
             val typeDescriptor = it.type.constructor.declarationDescriptor!!
             it.node to class2spec[typeDescriptor]!!.id
         }
@@ -270,9 +271,7 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
         return testSourcePath.toFile()
     }
 
-    protected open fun checkFile(file: KtFile, expectedFile: File): MutableMap<TextRange, String> {
-        val range2type = mutableMapOf<TextRange, String>()
-
+    protected open fun checkFile(file: KtFile, expectedFile: File): List<TypedNode> {
         val resolutionFacade = file.getResolutionFacade()
         val (bindingContext, moduleDescriptor) = resolutionFacade.analyzeWithAllCompilerChecks(listOf(file))
 
@@ -288,7 +287,7 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             )
         )
 
-        val extractedTypes = mutableListOf<ExtractedType>()
+        val extractedTypes = mutableListOf<TypedNode>()
         val actualDiagnostics = CheckerTestUtil.getDiagnosticsIncludingSyntaxErrors(
             bindingContext,
             file,
@@ -301,7 +300,7 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             ),
             dataFlowValueFactory = resolutionFacade.getDataFlowValueFactory(),
             moduleDescriptor = moduleDescriptor as ModuleDescriptorImpl,
-            extractedTypes = extractedTypes
+            typedNodes = extractedTypes
         ).filter { diagnosticsFilter.value(it.diagnostic) }
 
         println()
@@ -332,7 +331,7 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
 
         DebugInfoDiagnosticFactory1.recordedTypes.clear()
 
-        return range2type
+        return extractedTypes
     }
 }
 

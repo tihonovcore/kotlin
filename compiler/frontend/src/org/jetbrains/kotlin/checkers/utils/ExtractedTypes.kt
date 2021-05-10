@@ -9,7 +9,7 @@ import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
 import org.jetbrains.kotlin.types.KotlinType
 
-data class ExtractedType(
+data class TypedNode(
     val type: KotlinType,
     val node: PsiElement,
     val context: List<DeclarationDescriptor>

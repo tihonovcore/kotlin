@@ -8,7 +8,7 @@ package org.jetbrains.kotlin.checkers.diagnostics.factories
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.checkers.ReferenceVariantsProvider
 import org.jetbrains.kotlin.checkers.utils.CheckerTestUtil
-import org.jetbrains.kotlin.checkers.utils.ExtractedType
+import org.jetbrains.kotlin.checkers.utils.TypedNode
 import org.jetbrains.kotlin.config.LanguageVersionSettings
 import org.jetbrains.kotlin.descriptors.ValueParameterDescriptor
 import org.jetbrains.kotlin.descriptors.impl.LocalVariableDescriptor
@@ -34,7 +34,7 @@ class DebugInfoDiagnosticFactory1 : DiagnosticFactory1<PsiElement, String>,
 
     override val withExplicitDefinitionOnly: Boolean
 
-    override val extractedTypes: MutableList<ExtractedType> = mutableListOf()
+    override val typedNodes: MutableList<TypedNode> = mutableListOf()
 
     @ExperimentalStdlibApi
     override fun createDiagnostic(
@@ -67,7 +67,7 @@ class DebugInfoDiagnosticFactory1 : DiagnosticFactory1<PsiElement, String>,
             ).first
 
             if (type != null) {
-                extractedTypes += ExtractedType(type, expression, types.toList())
+                typedNodes += TypedNode(type, expression, types.toList())
             }
 
             val declarationDescriptor = type?.constructor?.declarationDescriptor

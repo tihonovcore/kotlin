@@ -116,7 +116,7 @@ object CheckerTestUtil {
         dataFlowValueFactory: DataFlowValueFactory?,
         moduleDescriptor: ModuleDescriptorImpl?,
         diagnosedRanges: MutableMap<IntRange, MutableSet<String>>? = null,
-        extractedTypes: MutableList<ExtractedType> = mutableListOf()
+        typedNodes: MutableList<TypedNode> = mutableListOf()
     ) = getDebugInfoDiagnostics(
         root,
         bindingContext,
@@ -138,7 +138,7 @@ object CheckerTestUtil {
         dataFlowValueFactory: DataFlowValueFactory?,
         moduleDescriptor: ModuleDescriptorImpl?,
         diagnosedRanges: Map<IntRange, MutableSet<String>>?,
-        extractedTypes: MutableList<ExtractedType>
+        typedNodes: MutableList<TypedNode>
     ): MutableList<ActualDiagnostic> {
         val debugAnnotations = mutableListOf<ActualDiagnostic>()
 
@@ -163,7 +163,7 @@ object CheckerTestUtil {
 
         renderDiagnosticsByFactoryList(
             factoryListForDiagnosticsOnExpression, root, bindingContext, configuration,
-            dataFlowValueFactory, moduleDescriptor, diagnosedRanges, debugAnnotations, extractedTypes = extractedTypes
+            dataFlowValueFactory, moduleDescriptor, diagnosedRanges, debugAnnotations, typedNodes = typedNodes
         )
 
         return debugAnnotations
@@ -179,7 +179,7 @@ object CheckerTestUtil {
         diagnosedRanges: Map<IntRange, MutableSet<String>>?,
         debugAnnotations: MutableList<ActualDiagnostic>,
         toExpression: (T) -> KtExpression? = { it as? KtExpression },
-        extractedTypes: MutableList<ExtractedType> = mutableListOf()
+        typedNodes: MutableList<TypedNode> = mutableListOf()
     ) {
         for ((context, factory) in factoryList) {
             for ((element, _) in bindingContext.getSliceContents(context)) {
@@ -190,8 +190,8 @@ object CheckerTestUtil {
                     debugAnnotations
                 )
 
-                extractedTypes += factory.extractedTypes
-                factory.extractedTypes.clear()
+                typedNodes += factory.typedNodes
+                factory.typedNodes.clear()
             }
         }
     }

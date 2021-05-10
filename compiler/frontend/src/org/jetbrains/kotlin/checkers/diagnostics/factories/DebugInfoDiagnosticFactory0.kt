@@ -7,7 +7,7 @@ package org.jetbrains.kotlin.checkers.diagnostics.factories
 
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.checkers.diagnostics.DebugInfoDiagnostic
-import org.jetbrains.kotlin.checkers.utils.ExtractedType
+import org.jetbrains.kotlin.checkers.utils.TypedNode
 import org.jetbrains.kotlin.config.LanguageVersionSettings
 import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.diagnostics.Diagnostic
@@ -25,7 +25,7 @@ class DebugInfoDiagnosticFactory0 private constructor(
     DebugInfoDiagnosticFactory {
     override val withExplicitDefinitionOnly: Boolean = false
 
-    override val extractedTypes: MutableList<ExtractedType> = mutableListOf()
+    override val typedNodes: MutableList<TypedNode> = mutableListOf()
 
     override fun createDiagnostic(
         expression: KtExpression,
