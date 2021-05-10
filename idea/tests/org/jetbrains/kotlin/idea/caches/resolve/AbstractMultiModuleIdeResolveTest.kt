@@ -51,9 +51,15 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
         File(stringDatasetDirectory).mkdirs()
         File(integerDatasetDirectory).mkdirs()
 
-        val output = File("$stringDatasetDirectory/dataset.json").apply {
-            if (exists()) writeText("")
-            else createNewFile()
+        File(stringDatasetDirectory).apply {
+            if (!exists()) mkdirs()
+
+            list()?.forEach { dirName ->
+                val directory = "$stringDatasetDirectory/$dirName"
+                File("$directory/paths").list()?.forEach { file -> File("$directory/paths/$file").delete() }
+                File(directory).list()?.forEach { file -> File("$directory/$file").delete() }
+                File(directory).delete()
+            }
         }
 
         File(sourceCodeDirectory).walkTopDown().forEach { file ->
@@ -67,7 +73,13 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
 
             try {
                 val samples = createSamplesForDataset(sourceKtFile, getMapPsiToTypeId(class2spec, typedNodes), 5..25, 25).skipTooBig()
-                output.appendText(samples.json() + System.lineSeparator())
+                val directory = Files.createTempDirectory(Paths.get(stringDatasetDirectory), file.name).toAbsolutePath()
+                val pathsDirectory = "$directory/paths".also { File(it).mkdirs() }
+
+                samples.forEach { sample ->
+                    Files.createTempFile(Paths.get(pathsDirectory), "paths", ".json").toFile().writeText(sample.json())
+                }
+                File("$directory/types.json").writeText(typesFromFile.convertToJson())
             } catch (e: Exception) {
                 println(file.absolutePath)
                 println(e.message)
@@ -75,7 +87,7 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             }
         }
 
-        randomSampling(stringDatasetDirectory)
+//        randomSampling(stringDatasetDirectory)
         string2integer(stringDatasetDirectory, integerDatasetDirectory)
     }
 
@@ -83,10 +95,12 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
         class2spec: Map<ClassifierDescriptor, JsonClassSpec>,
         typedNodes: List<TypedNode>
     ): Map<PsiElement, Int> {
-        return typedNodes.associate {
+        return typedNodes.mapNotNull {
             val typeDescriptor = it.type.constructor.declarationDescriptor!!
-            it.node to class2spec[typeDescriptor]!!.id
-        }
+            val node = it.node
+            val typeId = class2spec[typeDescriptor]?.id ?: return@mapNotNull null
+            node to typeId
+        }.associate { it }
     }
 
     private fun randomSampling(stringDatasetDirectory: String) {
@@ -159,20 +173,24 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
 
         val gson = Gson()
 
-        File("$stringDatasetDirectory/dataset.json").forEachLine { line ->
-            JsonParser.parseString(line).asJsonArray.forEach { sample ->
-                gson.fromJson(sample, StringDatasetSample::class.java).apply {
-                    pathCountStatistics.update(leafPaths.size)
+        File(stringDatasetDirectory).list()?.forEach { dirName ->
+            val directory = "$stringDatasetDirectory/$dirName/paths"
+            File(directory).list()?.forEach { file ->
+                val text = File("$directory/$file").readText()
+                JsonParser.parseString(text).asJsonObject.also { sample ->
+                    gson.fromJson(sample, StringDatasetSample::class.java).apply {
+                        pathCountStatistics.update(leafPaths.size)
 
-                    leafPaths.forEach { path ->
-                        pathLengthStatistics.update(path.size)
+                        leafPaths.forEach { path ->
+                            pathLengthStatistics.update(path.size)
+                        }
+
+                        if (target != null) {
+                            targetFrequency.update(target)
+                        }
+
+                        indexStatistics.update(indexAmongBrothers)
                     }
-
-                    if (target != null) {
-                        targetFrequency.update(target)
-                    }
-
-                    indexStatistics.update(indexAmongBrothers)
                 }
             }
         }
@@ -184,26 +202,45 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             }
         }
 
-        val integerDataset = File("$integerDatasetDirectory/dataset.json").apply {
-            if (exists()) writeText("")
-            else createNewFile()
+        File(integerDatasetDirectory).apply {
+            if (!exists()) mkdirs()
+
+            list()?.forEach { dirName ->
+                val directory = "$integerDatasetDirectory/$dirName"
+                File("$directory/paths").list()?.forEach { file -> File("$directory/paths/$file").delete() }
+                File(directory).list()?.forEach { file -> File("$directory/$file").delete() }
+
+                if (dirName !in listOf("integer2string.json", "string2integer.json")) File(directory).delete()
+            }
         }
 
-        File("$stringDatasetDirectory/dataset.json").forEachLine { line ->
-            val integerSamples = JsonParser.parseString(line).asJsonArray.map {
-                val sample = gson.fromJson(it, StringDatasetSample::class.java)
-                IntegerDatasetSample(
-                    sample.leafPaths.map { path -> path.map { node -> string2integer[node]!! } },
-                    sample.rootPath.map { node -> string2integer[node]!! },
-                    sample.typesForLeafPaths,
-                    sample.typesForRootPath,
-                    sample.leftBrothers.map { node -> string2integer[node]!! },
-                    sample.indexAmongBrothers,
-                    string2integer[sample.target]
-                )
-            }.json()
+        File(stringDatasetDirectory).list()?.forEach { dirName ->
+            val stringDirectory = "$stringDatasetDirectory/$dirName/paths"
+            val integerDirectory = "$integerDatasetDirectory/$dirName/paths"
+            File(integerDirectory).mkdirs()
 
-            integerDataset.appendText(integerSamples + System.lineSeparator())
+            File(stringDirectory).list()?.forEach { file ->
+                val text = File("$stringDirectory/$file").readText()
+                val integerSample = JsonParser.parseString(text).asJsonObject.let {
+                    val sample = gson.fromJson(it, StringDatasetSample::class.java)
+                    IntegerDatasetSample(
+                        sample.leafPaths.map { path -> path.map { node -> string2integer[node]!! } },
+                        sample.rootPath.map { node -> string2integer[node]!! },
+                        sample.typesForLeafPaths,
+                        sample.typesForRootPath,
+                        sample.leftBrothers.map { node -> string2integer[node]!! },
+                        sample.indexAmongBrothers,
+                        string2integer[sample.target]
+                    )
+                }.json()
+
+                File("$integerDirectory/$file").writeText(integerSample)
+            }
+
+            Files.copy(
+                Paths.get("$stringDatasetDirectory/$dirName/types.json"),
+                Paths.get("$integerDatasetDirectory/$dirName/types.json")
+            )
         }
 
         if (printDatasetStatistics) {
