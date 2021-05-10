@@ -7,8 +7,8 @@ package org.jetbrains.kotlin.idea.caches.resolve
 
 import com.google.gson.Gson
 import com.google.gson.JsonParser
-import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiManager
 import com.intellij.util.io.exists
 import org.jetbrains.kotlin.checkers.BaseDiagnosticsTest
@@ -17,6 +17,7 @@ import org.jetbrains.kotlin.checkers.diagnostics.factories.DebugInfoDiagnosticFa
 import org.jetbrains.kotlin.checkers.utils.CheckerTestUtil
 import org.jetbrains.kotlin.checkers.utils.DiagnosticsRenderingConfiguration
 import org.jetbrains.kotlin.checkers.utils.ExtractedType
+import org.jetbrains.kotlin.descriptors.ClassifierDescriptor
 import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.diploma.*
 import org.jetbrains.kotlin.diploma.analysis.*
@@ -29,7 +30,9 @@ import org.jetbrains.kotlin.idea.resolve.getLanguageVersionSettings
 import org.jetbrains.kotlin.idea.stubs.AbstractMultiModuleTest
 import org.jetbrains.kotlin.idea.test.PluginTestCaseBase
 import org.jetbrains.kotlin.psi.KtElement
+import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.KtPsiFactory
 import org.jetbrains.kotlin.test.KotlinTestUtils
 import org.jetbrains.kotlin.test.TestMetadata
 import java.io.File
@@ -62,7 +65,7 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             val extractedTypes = checkFile(sourceKtFile, file)
 
             try {
-                val samples = createSamplesForDataset(sourceKtFile, class2spec, extractedTypes, 5..25, 25).skipTooBig()
+                val samples = createSamplesForDataset(sourceKtFile, getMapPsiToTypeId(class2spec, extractedTypes), 5..25, 25).skipTooBig()
                 output.appendText(samples.json() + System.lineSeparator())
             } catch (e: Exception) {
                 println(file.absolutePath)
@@ -73,6 +76,16 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
 
         randomSampling(stringDatasetDirectory)
         string2integer(stringDatasetDirectory, integerDatasetDirectory)
+    }
+
+    private fun getMapPsiToTypeId(
+        class2spec: Map<ClassifierDescriptor, JsonClassSpec>,
+        extractedTypes: List<ExtractedType>
+    ): Map<PsiElement, Int> {
+        return extractedTypes.associate {
+            val typeDescriptor = it.type.constructor.declarationDescriptor!!
+            it.node to class2spec[typeDescriptor]!!.id
+        }
     }
 
     private fun randomSampling(stringDatasetDirectory: String) {

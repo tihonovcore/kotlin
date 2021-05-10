@@ -31,17 +31,14 @@ fun PsiElement.renderTree(
 const val DOWN_ARROW = "↓"
 const val UP_ARROW = "↑"
 
-fun List<PsiElement>.toDatasetStyle(range2type: Map<TextRange, String>): List<String> {
+fun List<PsiElement>.toDatasetStyle(): List<String> {
     // NOTE: вроде бы от PSI там только комменты и пробелы,
     // поэтому можно оставить только KtElement
     val ktElements = filterIsInstance(KtElement::class.java)
 
     val result = mutableListOf<String>()
     ktElements.forEachIndexed { index, element ->
-        val kind = element.kind()
-        val type = range2type[element.textRange]
-
-        result += if (type != null) "$kind # $type" else kind
+        result += element.kind()
 
         val next = ktElements.getOrNull(index + 1) ?: return@forEachIndexed
         result += when {

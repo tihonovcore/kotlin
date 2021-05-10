@@ -5,11 +5,7 @@
 
 package org.jetbrains.kotlin.diploma
 
-import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
-import org.jetbrains.kotlin.checkers.utils.ExtractedType
-import org.jetbrains.kotlin.descriptors.ClassifierDescriptor
-import org.jetbrains.kotlin.diploma.analysis.JsonClassSpec
 import org.jetbrains.kotlin.psi.KtElement
 import kotlin.random.Random
 
@@ -31,10 +27,16 @@ class AstWithAfterLast(
 
 }
 
+private fun List<PsiElement>.typeInfo(psi2typeId: Map<PsiElement, Int>): List<Pair<Int, Int>> {
+    return mapIndexedNotNull { index, node ->
+        val id = psi2typeId[node] ?: return@mapIndexedNotNull null
+        Pair(index, id)
+    }
+}
+
 fun createSamplesForDataset(
     root: PsiElement,
-    class2spec: Map<ClassifierDescriptor, JsonClassSpec>,
-    extractedTypes: List<ExtractedType>,
+    psi2typeId: Map<PsiElement, Int>,
     depth: IntRange,
     samplesCount: Int
 ): List<StringDatasetSample> {
@@ -47,9 +49,14 @@ fun createSamplesForDataset(
 
             val leafPaths = getLeafPaths(targetElement.parent, targetIndex).unbox()
             val rootPath = getRootPath(targetElement.parent).unbox()
+            val typesForLeafPaths = leafPaths.map { path -> path.typeInfo(psi2typeId) }
+            val typesForRootPath = rootPath.typeInfo(psi2typeId)
+
             StringDatasetSample(
                 leafPaths = leafPaths.map { path -> path.toDatasetStyle() },
                 rootPath = rootPath.toDatasetStyle(),
+                typesForLeafPaths = typesForLeafPaths,
+                typesForRootPath = typesForRootPath,
                 leftBrothers = targetElement.parent.children.take(targetIndex).map { it.original.kind() },
                 indexAmongBrothers = targetIndex,
                 target = targetElement.original.kind()
@@ -61,8 +68,7 @@ fun createSampleForPredict(
     root: PsiElement,
     from: PsiElement,
     notFinished: List<KtElement>,
-    class2spec: Map<ClassifierDescriptor, JsonClassSpec>,
-    extractedTypes: List<ExtractedType>,
+    psi2typeId: Map<PsiElement, Int>,
 ): StringDatasetSample {
     val targetIndex = from.children.size
 
@@ -73,10 +79,14 @@ fun createSampleForPredict(
         .let { wrappedFrom ->
             val leafPaths = getLeafPaths(wrappedFrom!!, targetIndex).unbox()
             val rootPath = getRootPath(wrappedFrom).unbox()
+            val typesForLeafPaths = leafPaths.map { path -> path.typeInfo(psi2typeId) }
+            val typesForRootPath = rootPath.typeInfo(psi2typeId)
 
             StringDatasetSample(
                 leafPaths = leafPaths.map { path -> path.toDatasetStyle() },
                 rootPath = rootPath.toDatasetStyle(),
+                typesForLeafPaths = typesForLeafPaths,
+                typesForRootPath = typesForRootPath,
                 leftBrothers = wrappedFrom.children.map { it.original.kind() },
                 indexAmongBrothers = targetIndex
             )
