@@ -449,7 +449,7 @@ class PathExtractor : AbstractMultiModuleIdeResolveTest() {
             val except = sourceKtFile.children[2].children[2]
 
             save(sourceKtFile, except)
-            val loaded = load(project)
+            val (loaded, notFinished) = load(project)
 
             println(loaded.text)
 
