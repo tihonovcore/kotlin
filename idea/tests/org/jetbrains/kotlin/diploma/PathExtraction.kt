@@ -27,11 +27,11 @@ class AstWithAfterLast(
 
 }
 
-private fun List<PsiElement>.typeInfo(psi2typeId: Map<PsiElement, Int>): List<Pair<Int, Int>> {
+private fun List<PsiElement>.typeInfo(psi2typeId: Map<PsiElement, Int>): Map<Int, Int> {
     return mapIndexedNotNull { index, node ->
         val id = psi2typeId[node] ?: return@mapIndexedNotNull null
         Pair(index, id)
-    }
+    }.associate { it }
 }
 
 fun createSamplesForDataset(
