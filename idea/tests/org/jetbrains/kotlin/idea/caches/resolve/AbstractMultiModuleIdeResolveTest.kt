@@ -21,6 +21,8 @@ import org.jetbrains.kotlin.descriptors.ClassifierDescriptor
 import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.diploma.*
 import org.jetbrains.kotlin.diploma.analysis.*
+import org.jetbrains.kotlin.diploma.cache.load
+import org.jetbrains.kotlin.diploma.cache.save
 import org.jetbrains.kotlin.idea.codeInsight.ReferenceVariantsHelper
 import org.jetbrains.kotlin.idea.core.util.toVirtualFile
 import org.jetbrains.kotlin.idea.project.KotlinMultiplatformAnalysisModeComponent
@@ -511,6 +513,23 @@ class PathExtractor : AbstractMultiModuleIdeResolveTest() {
         }
 
         File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/kind2finishList.json").writeText(kind2finishList.json())
+    }
+
+    @TestMetadata("cache")
+    fun testCache() {
+        File(sourceCodeDirectory).walkTopDown().forEach { file ->
+            if (file.mustBeSkipped()) return@forEach
+
+            val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
+            val except = sourceKtFile.children[2].children[2]
+
+            save(sourceKtFile, except)
+            val loaded = load(project)
+
+            println(loaded.text)
+
+            return
+        }
     }
 
     @TestMetadata("learnParentChildRelation")
