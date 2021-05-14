@@ -538,18 +538,37 @@ class PathExtractor : AbstractMultiModuleIdeResolveTest() {
 
         fun KtElement.dfs() {
             val parentKind = kind()
+            val ktChildren = children.filterIsInstance(KtElement::class.java)
+            val ktChildrenKinds = ktChildren.map { it.kind() }
 
-            children.filterIsInstance(KtElement::class.java).forEach { element ->
+            if (parentKind in listOf("BODY", "CLASS_BODY", "BLOCK", "FILE", "VALUE_PARAMETER_LIST", "STRING_TEMPLATE", "WHEN", "IMPORT_LIST", "VALUE_ARGUMENT_LIST", "TYPE_ARGUMENT_LIST", "TYPE_PARAMETER_LIST")) {
+                ktChildren.forEach { element ->
+                    val old = parentChild[parentKind] ?: mutableSetOf()
+                    old += element.kind()
+                    parentChild[parentKind] = old
+
+                    element.dfs()
+                }
+
                 val old = parentChild[parentKind] ?: mutableSetOf()
-                old += element.kind()
+                old += AFTER_LAST_KIND
                 parentChild[parentKind] = old
+            } else {
+                ktChildren.forEachIndexed { index, element ->
+                    val kindWithBrothers = (listOf(parentKind) + ktChildrenKinds.take(index)).joinToString()
 
-                element.dfs()
+                    val old = parentChild[kindWithBrothers] ?: mutableSetOf()
+                    old += element.kind()
+                    parentChild[kindWithBrothers] = old
+
+                    element.dfs()
+                }
+
+                val fullKind = (listOf(parentKind) + ktChildrenKinds).joinToString()
+                val old = parentChild[fullKind] ?: mutableSetOf()
+                old += AFTER_LAST_KIND
+                parentChild[fullKind] = old
             }
-
-            val old = parentChild[parentKind] ?: mutableSetOf()
-            old += AFTER_LAST_KIND
-            parentChild[parentKind] = old
         }
 
         File(sourceCodeDirectory).walkTopDown().forEach { file ->
