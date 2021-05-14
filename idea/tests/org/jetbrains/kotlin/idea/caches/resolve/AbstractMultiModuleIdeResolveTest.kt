@@ -93,18 +93,6 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
         string2integer(stringDatasetDirectory, integerDatasetDirectory)
     }
 
-    private fun getMapPsiToTypeId(
-        class2spec: Map<ClassifierDescriptor, JsonClassSpec>,
-        typedNodes: List<TypedNode>
-    ): Map<PsiElement, Int> {
-        return typedNodes.mapNotNull {
-            val typeDescriptor = it.type.constructor.declarationDescriptor!!
-            val node = it.node
-            val typeId = class2spec[typeDescriptor]?.id ?: return@mapNotNull null
-            node to typeId
-        }.associate { it }
-    }
-
     private fun randomSampling(stringDatasetDirectory: String) {
         val prefix = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out"
         val samples = mutableMapOf<String, MutableList<Pair<Int, Int>>>()
@@ -308,69 +296,6 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
         }
 
         return testSourcePath.toFile()
-    }
-
-    protected open fun checkFile(file: KtFile, expectedFile: File): List<TypedNode> {
-        val resolutionFacade = file.getResolutionFacade()
-        val (bindingContext, moduleDescriptor) = resolutionFacade.analyzeWithAllCompilerChecks(listOf(file))
-
-        val directives = KotlinTestUtils.parseDirectives(file.text)
-        val diagnosticsFilter = BaseDiagnosticsTest.parseDiagnosticFilterDirective(directives, allowUnderscoreUsage = false)
-
-        ReferenceVariantsProvider.registerInstance(
-            ReferenceVariantsHelper(
-                bindingContext,
-                resolutionFacade,
-                moduleDescriptor,
-                { _ -> true }
-            )
-        )
-
-        val extractedTypes = mutableListOf<TypedNode>()
-        val actualDiagnostics = CheckerTestUtil.getDiagnosticsIncludingSyntaxErrors(
-            bindingContext,
-            file,
-            markDynamicCalls = false,
-            dynamicCallDescriptors = mutableListOf(),
-            configuration = DiagnosticsRenderingConfiguration(
-                platform = null, // we don't need to attach platform-description string to diagnostic here
-                withNewInference = false,
-                languageVersionSettings = resolutionFacade.getLanguageVersionSettings(),
-            ),
-            dataFlowValueFactory = resolutionFacade.getDataFlowValueFactory(),
-            moduleDescriptor = moduleDescriptor as ModuleDescriptorImpl,
-            typedNodes = extractedTypes
-        ).filter { diagnosticsFilter.value(it.diagnostic) }
-
-        println()
-
-//        val actualTextWithDiagnostics = CheckerTestUtil.addDiagnosticMarkersToText(
-//            file,
-//            actualDiagnostics,
-//            diagnosticToExpectedDiagnostic = emptyMap(),
-//            getFileText = { it.text },
-//            uncheckedDiagnostics = emptyList(),
-//            withNewInferenceDirective = false,
-//            renderDiagnosticMessages = true,
-//            range2type
-//        ).toString()
-
-//        fun write(suffix: String, text: String) {
-//            val outputDirName = expectedFile.parentFile.absolutePath
-//            val outputFileName = expectedFile.nameWithoutExtension + ".txt"
-//
-//            File("$outputDirName$suffix/$outputFileName").apply {
-//                parentFile.mkdirs()
-//                writeText(text)
-//            }
-//        }
-//
-//        write("_dumped_types", actualTextWithDiagnostics)
-//        write("_ti", DebugInfoDiagnosticFactory1.recordedTypes.map { (type, info) -> "${type}: ${info.first}, ${info.second}" }.joinToString("\n"))
-
-        DebugInfoDiagnosticFactory1.recordedTypes.clear()
-
-        return extractedTypes
     }
 }
 
@@ -580,4 +505,79 @@ class PathExtractor : AbstractMultiModuleIdeResolveTest() {
 
         File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/parentChild.json").writeText(parentChild.json())
     }
+}
+
+fun getMapPsiToTypeId(
+    class2spec: Map<ClassifierDescriptor, JsonClassSpec>,
+    typedNodes: List<TypedNode>
+): Map<PsiElement, Int> {
+    return typedNodes.mapNotNull {
+        val typeDescriptor = it.type.constructor.declarationDescriptor!!
+        val node = it.node
+        val typeId = class2spec[typeDescriptor]?.id ?: return@mapNotNull null
+        node to typeId
+    }.associate { it }
+}
+
+fun checkFile(file: KtFile, expectedFile: File): List<TypedNode> {
+    val resolutionFacade = file.getResolutionFacade()
+    val (bindingContext, moduleDescriptor) = resolutionFacade.analyzeWithAllCompilerChecks(listOf(file))
+
+    val directives = KotlinTestUtils.parseDirectives(file.text)
+    val diagnosticsFilter = BaseDiagnosticsTest.parseDiagnosticFilterDirective(directives, allowUnderscoreUsage = false)
+
+    ReferenceVariantsProvider.registerInstance(
+        ReferenceVariantsHelper(
+            bindingContext,
+            resolutionFacade,
+            moduleDescriptor,
+            { _ -> true }
+        )
+    )
+
+    val extractedTypes = mutableListOf<TypedNode>()
+    val actualDiagnostics = CheckerTestUtil.getDiagnosticsIncludingSyntaxErrors(
+        bindingContext,
+        file,
+        markDynamicCalls = false,
+        dynamicCallDescriptors = mutableListOf(),
+        configuration = DiagnosticsRenderingConfiguration(
+            platform = null, // we don't need to attach platform-description string to diagnostic here
+            withNewInference = false,
+            languageVersionSettings = resolutionFacade.getLanguageVersionSettings(),
+        ),
+        dataFlowValueFactory = resolutionFacade.getDataFlowValueFactory(),
+        moduleDescriptor = moduleDescriptor as ModuleDescriptorImpl,
+        typedNodes = extractedTypes
+    ).filter { diagnosticsFilter.value(it.diagnostic) }
+
+    println()
+
+//        val actualTextWithDiagnostics = CheckerTestUtil.addDiagnosticMarkersToText(
+//            file,
+//            actualDiagnostics,
+//            diagnosticToExpectedDiagnostic = emptyMap(),
+//            getFileText = { it.text },
+//            uncheckedDiagnostics = emptyList(),
+//            withNewInferenceDirective = false,
+//            renderDiagnosticMessages = true,
+//            range2type
+//        ).toString()
+
+//        fun write(suffix: String, text: String) {
+//            val outputDirName = expectedFile.parentFile.absolutePath
+//            val outputFileName = expectedFile.nameWithoutExtension + ".txt"
+//
+//            File("$outputDirName$suffix/$outputFileName").apply {
+//                parentFile.mkdirs()
+//                writeText(text)
+//            }
+//        }
+//
+//        write("_dumped_types", actualTextWithDiagnostics)
+//        write("_ti", DebugInfoDiagnosticFactory1.recordedTypes.map { (type, info) -> "${type}: ${info.first}, ${info.second}" }.joinToString("\n"))
+
+    DebugInfoDiagnosticFactory1.recordedTypes.clear()
+
+    return extractedTypes
 }
