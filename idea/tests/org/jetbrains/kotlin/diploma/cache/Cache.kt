@@ -6,6 +6,7 @@
 package org.jetbrains.kotlin.diploma.cache
 
 import com.google.gson.Gson
+import com.google.gson.JsonParser
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.impl.source.tree.LeafPsiElement
@@ -24,6 +25,10 @@ import java.io.File
 private const val ast = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/cache/cacheExample.json"
 private const val attempts = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/cache/attempts.json"
 
+fun attempts(): Int {
+    return JsonParser.parseString(File(attempts).readText()).asJsonObject["attempts"].asInt
+}
+
 fun save(file: KtFile, except: PsiElement) {
     val json = file.encode(except).json()
     File(ast).writeText(json)
@@ -33,7 +38,7 @@ fun save(file: KtFile, except: PsiElement) {
 /**
  * @return decoded file and list of not finished elements
  */
-fun load(project: Project): Pair<KtFile, List<PsiElement>> {
+fun load(project: Project): Pair<KtFile, MutableList<PsiElement>> {
     val json = File(ast).readText()
 
     val tree = Gson().fromJson(json, JsonTree::class.java)

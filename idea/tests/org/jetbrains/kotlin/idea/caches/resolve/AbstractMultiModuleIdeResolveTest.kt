@@ -71,7 +71,7 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
             val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
             val typesFromFile = extractTypes(sourceKtFile)
             val class2spec = typesFromFile.second
-            val typedNodes = checkFile(sourceKtFile, file)
+            val (typedNodes, hasCompileErrors) = checkFile(sourceKtFile)
 
             try {
                 val samples = createSamplesForDataset(sourceKtFile, getMapPsiToTypeId(class2spec, typedNodes), 5..25, 25).skipTooBig()
@@ -519,7 +519,7 @@ fun getMapPsiToTypeId(
     }.associate { it }
 }
 
-fun checkFile(file: KtFile, expectedFile: File): List<TypedNode> {
+fun checkFile(file: KtFile): Pair<List<TypedNode>, Boolean> {
     val resolutionFacade = file.getResolutionFacade()
     val (bindingContext, moduleDescriptor) = resolutionFacade.analyzeWithAllCompilerChecks(listOf(file))
 
@@ -579,5 +579,5 @@ fun checkFile(file: KtFile, expectedFile: File): List<TypedNode> {
 
     DebugInfoDiagnosticFactory1.recordedTypes.clear()
 
-    return extractedTypes
+    return Pair(extractedTypes, hasCompileErrors(actualDiagnostics))
 }
