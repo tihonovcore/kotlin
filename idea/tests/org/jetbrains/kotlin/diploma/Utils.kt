@@ -6,8 +6,10 @@
 package org.jetbrains.kotlin.diploma
 
 import com.google.gson.Gson
+import com.google.gson.JsonParser
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
+import org.jetbrains.kotlin.idea.caches.resolve.integerDatasetDirectory
 import org.jetbrains.kotlin.psi.*
 import java.io.File
 
@@ -78,10 +80,12 @@ fun PsiElement.kind(): String {
 
 fun Any.json(): String = Gson().toJson(this)
 
+fun StringDatasetSample.isNotTooBig(): Boolean {
+    return leafPaths.size <= 1000 && leafPaths.all { path -> path.size <= 60 } && indexAmongBrothers <= 15
+}
+
 fun List<StringDatasetSample>.skipTooBig(): List<StringDatasetSample> {
-    return filter {
-        it.leafPaths.size <= 1000 && it.leafPaths.all { path -> path.size <= 60 } && it.indexAmongBrothers <= 15
-    }
+    return filter { it.isNotTooBig() }
 }
 
 fun KtElement.append(new: KtElement): KtElement {
@@ -92,4 +96,23 @@ fun KtElement.append(new: KtElement): KtElement {
     }
 
     return add(new) as KtElement
+}
+
+fun StringDatasetSample.toIntegerSample(): IntegerDatasetSample {
+    val string2integer = mutableMapOf<String, Int>()
+    File("$integerDatasetDirectory/string2integer.json").readText().apply {
+        for ((string, integer) in JsonParser.parseString(this).asJsonObject.entrySet()) {
+            string2integer[string] = integer.asInt
+        }
+    }
+
+    return IntegerDatasetSample(
+        leafPaths.map { path -> path.map { node -> string2integer[node]!! } },
+        rootPath.map { node -> string2integer[node]!! },
+        typesForLeafPaths,
+        typesForRootPath,
+        leftBrothers.map { node -> string2integer[node]!! },
+        indexAmongBrothers,
+        string2integer[target]
+    )
 }

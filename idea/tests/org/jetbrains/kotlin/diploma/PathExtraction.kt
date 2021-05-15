@@ -64,6 +64,38 @@ fun createSamplesForDataset(
         }
 }
 
+fun createSampleForFit(
+    root: PsiElement,
+    psi2typeId: Map<PsiElement, Int>,
+    depth: IntRange,
+    samplesCount: Int
+): Pair<StringDatasetSample, PsiElement> {
+    val samples = buildTree(root, null)
+        .addAfterLast()
+        .elementsFromDepth(depth)
+        .smartlyTake(samplesCount)
+        .map { targetElement ->
+            val targetIndex = targetElement.parent!!.children.indexOf(targetElement)
+
+            val leafPaths = getLeafPaths(targetElement.parent, targetIndex).unbox()
+            val rootPath = getRootPath(targetElement.parent).unbox()
+            val typesForLeafPaths = leafPaths.map { path -> path.typeInfo(psi2typeId) }
+            val typesForRootPath = rootPath.typeInfo(psi2typeId)
+
+            StringDatasetSample(
+                leafPaths = leafPaths.map { path -> path.toDatasetStyle() },
+                rootPath = rootPath.toDatasetStyle(),
+                typesForLeafPaths = typesForLeafPaths,
+                typesForRootPath = typesForRootPath,
+                leftBrothers = targetElement.parent.children.take(targetIndex).map { it.original.kind() },
+                indexAmongBrothers = targetIndex,
+                target = targetElement.original.kind()
+            ) to targetElement.original
+        }
+
+    return samples.first { it.first.isNotTooBig() }
+}
+
 fun createSampleForPredict(
     root: PsiElement,
     from: PsiElement,

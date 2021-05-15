@@ -313,14 +313,14 @@ abstract class AbstractMultiplatformAnalysisTest : AbstractDiagnosticCodeMetaInf
     }
 }
 
+private val root = "/home/tihonovcore/diploma"
+val sourceCodeDirectory = "$root/kotlin/compiler/testData/codegen/box"
+val stringDatasetDirectory = "$root/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/string"
+val integerDatasetDirectory = "$root/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/integer"
+val typesDatasetDirectory = "$root/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/types"
+
 class PathExtractor : AbstractMultiModuleIdeResolveTest() {
     override fun getTestDataPath(): String = PluginTestCaseBase.getTestDataPathBase()
-
-    private val root = "/home/tihonovcore/diploma"
-    val sourceCodeDirectory = "$root/kotlin/compiler/testData/codegen/box"
-    val stringDatasetDirectory = "$root/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/string"
-    val integerDatasetDirectory = "$root/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/integer"
-    val typesDatasetDirectory = "$root/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/types"
 
     @TestMetadata("createMapping")
     fun testCreateMapping() {
