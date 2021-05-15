@@ -18,7 +18,16 @@ class NewKind2Psi(project: Project) {
     fun decode(predictedNodeKind: String): KtElement {
         return when (predictedNodeKind) {
             AFTER_LAST_KIND -> throw Pipeline.AfterLastException
-            "BOX_TEMPLATE" -> factory.createFile("fun box() {}").also { it.children.first().delete(); it.children.first().delete() }
+            "BOX_TEMPLATE" -> {
+                val emptyFile = factory.createPhysicalFile("context", "")
+                factory.createAnalyzableFile("from_kind_2_psi", "fun box() {}", emptyFile).also {
+                    it.children.first().delete(); it.children.first().delete()
+                }
+            }
+            "FILE" -> {
+                val emptyFile = factory.createPhysicalFile("context", "")
+                factory.createAnalyzableFile("from_kind_2_psi", "", emptyFile)
+            }
             else -> {
                 val element = file.find(predictedNodeKind) ?: throw IllegalArgumentException("<!! expected $predictedNodeKind !!>")
                 val copy = element.copy() as KtElement
