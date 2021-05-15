@@ -29,8 +29,16 @@ fun attempts(): Int {
     return JsonParser.parseString(File(attempts).readText()).asJsonObject["attempts"].asInt
 }
 
-fun save(file: KtFile, except: PsiElement) {
-    val json = file.encode(except).json()
+fun attempts(new: Int) {
+    File(attempts).writeText("{ \"attempts\": $new }")
+}
+
+fun save(
+    file: KtFile,
+    except: PsiElement? = null,
+    notFinished: List<PsiElement> = emptyList()
+) {
+    val json = file.encode(except, notFinished).json()
     File(ast).writeText(json)
     File(attempts).writeText("{ \"attempts\": 0 }")
 }
@@ -56,13 +64,18 @@ private data class JsonTree(
     val children: MutableList<JsonTree> = mutableListOf()
 )
 
-private fun PsiElement.encode(except: PsiElement? = null): JsonTree {
+private fun PsiElement.encode(
+    except: PsiElement? = null,
+    notFinished: List<PsiElement> = emptyList()
+): JsonTree {
     val tree = JsonTree(kind = kind())
+    if (notFinished.any { it === this }) {
+        tree.finished = false
+    }
 
     for (child in node.children()) {
         if (child.psi === except) {
-            tree.finished = false
-            return tree
+            break
         }
 
         if (child.psi is LeafPsiElement) {

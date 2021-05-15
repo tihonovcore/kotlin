@@ -8,6 +8,7 @@ package org.jetbrains.kotlin.diploma.cache
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiManager
+import org.jetbrains.kotlin.checkers.utils.TypedNode
 import org.jetbrains.kotlin.diploma.*
 import org.jetbrains.kotlin.diploma.analysis.convertToJson
 import org.jetbrains.kotlin.diploma.analysis.extractTypes
@@ -17,8 +18,6 @@ import org.jetbrains.kotlin.idea.core.util.toVirtualFile
 import org.jetbrains.kotlin.psi.KtElement
 import org.jetbrains.kotlin.psi.KtFile
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.Paths
 
 /**
  * @return integer dataset sample and types info at json
@@ -41,7 +40,7 @@ fun extractPathsFrom(path: String, project: Project): Pair<String, String> {
 
 private const val MAX_ATTEMPTS = 6
 
-fun workWithPrediction(kind: String, type: Int, project: Project) {
+fun workWithPrediction(kind: String, type: Int, project: Project): KotlinResponse {
     val attempts = attempts()
     val (file, notFinished) = load(project)
     //TODO: load context
@@ -54,23 +53,24 @@ fun workWithPrediction(kind: String, type: Int, project: Project) {
     } catch (_: Pipeline.AfterLastException) {
         notFinished.removeIf { it === nodeForChildAddition }
 
-        val (_, hasCompileErrors) = checkFile(file)
+        val (typedNodes, hasCompileErrors) = checkFile(file)
         if (hasCompileErrors) {
             if (attempts < MAX_ATTEMPTS) {
-                //TODO: save new attempts
-                //TODO: save new ast
-                //TODO: return paths
+                attempts(new = attempts + 1)
+                save(file, notFinished = notFinished)
+                return extractPaths(file, notFinished, typedNodes)
             } else {
-                //TODO: штраф
+                return Fail
             }
         } else {
-            //TODO: буст
+            return Success
         }
     }
 
     //TODO: for REF_EXPR get name based on context
-    //TODO: save new ast
-    //TODO: return paths
+    save(file, notFinished = notFinished)
+    val (typedNodes, _) = checkFile(file)
+    return extractPaths(file, notFinished, typedNodes)
 }
 
 private fun findNodeForChildAddition(element: PsiElement, notFinished: List<PsiElement>): PsiElement {
@@ -82,3 +82,21 @@ private fun findNodeForChildAddition(element: PsiElement, notFinished: List<PsiE
 
     return element
 }
+
+private fun extractPaths(file: KtFile, notFinished: List<PsiElement>, typedNodes: List<TypedNode>): Paths {
+    val typesFromFile = extractTypes(file)
+    val class2spec = typesFromFile.second
+    val stringSample = createSampleForPredict(
+        file,
+        findNodeForChildAddition(file, notFinished),
+        notFinished.filterIsInstance(KtElement::class.java),
+        getMapPsiToTypeId(class2spec, typedNodes)
+    )
+    val integerSample = stringSample.toIntegerSample()
+    return Paths(integerSample.json(), typesFromFile.convertToJson())
+}
+
+sealed class KotlinResponse
+object Success : KotlinResponse()
+object Fail : KotlinResponse()
+class Paths(val integerDatasetJson: String, val typesInfoJson: String) : KotlinResponse()
