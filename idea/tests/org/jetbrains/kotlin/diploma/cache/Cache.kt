@@ -73,9 +73,10 @@ private fun PsiElement.encode(
         tree.finished = false
     }
 
+    var skipInnerNodes = false
     for (child in node.children()) {
         if (child.psi === except) {
-            break
+            skipInnerNodes = true
         }
 
         if (child.psi is LeafPsiElement) {
@@ -83,7 +84,7 @@ private fun PsiElement.encode(
             val text = child.text
 
             tree.children += JsonTree(kind, text)
-        } else {
+        } else if (!skipInnerNodes) {
             tree.children += child.psi.encode(except)
         }
     }

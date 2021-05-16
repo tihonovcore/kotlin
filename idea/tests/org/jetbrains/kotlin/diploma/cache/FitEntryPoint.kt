@@ -33,7 +33,7 @@ fun extractPathsFrom(path: String, project: Project): Pair<String, String> {
     val (stringSample, from) = createSampleForFit(ktFile, getMapPsiToTypeId(class2spec, typedNodes), 5..25, 25)
     val integerSample = stringSample.toIntegerSample()
 
-    save(ktFile, from)
+    save(ktFile, from, listOf(from.parent))
 
     return Pair(integerSample.json(), typesFromFile.convertToJson())
 }
