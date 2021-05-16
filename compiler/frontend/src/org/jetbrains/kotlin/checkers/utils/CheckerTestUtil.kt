@@ -126,8 +126,18 @@ object CheckerTestUtil {
         dataFlowValueFactory,
         moduleDescriptor,
         diagnosedRanges,
-        extractedTypes
-    )
+        typedNodes
+    ).apply {
+        bindingContext.diagnostics.forEach { diagnostic ->
+            if (PsiTreeUtil.isAncestor(root, diagnostic.psiElement, false)) {
+                add(ActualDiagnostic(diagnostic, configuration.platform, configuration.withNewInference))
+            }
+        }
+
+        for (errorElement in AnalyzingUtils.getSyntaxErrorRanges(root)) {
+            add(ActualDiagnostic(SyntaxErrorDiagnostic(errorElement), configuration.platform, configuration.withNewInference))
+        }
+    }
 
     fun getDebugInfoDiagnostics(
         root: PsiElement,
