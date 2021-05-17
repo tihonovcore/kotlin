@@ -67,7 +67,7 @@ private data class JsonTree(
 
 private fun PsiElement.encode(
     except: PsiElement? = null,
-    notFinished: List<PsiElement> = emptyList()
+    notFinished: List<PsiElement>
 ): JsonTree {
     val tree = JsonTree(kind = kind())
     if (notFinished.any { it === this }) {
@@ -86,7 +86,7 @@ private fun PsiElement.encode(
 
             tree.children += JsonTree(kind, text)
         } else if (!skipInnerNodes) {
-            tree.children += child.psi.encode(except)
+            tree.children += child.psi.encode(except, notFinished)
         }
     }
 

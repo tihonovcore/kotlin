@@ -40,7 +40,12 @@ fun extractPathsFrom(path: String, project: Project): Pair<String, String> {
     val (stringSample, from) = createSampleForFit(ktFile, getMapPsiToTypeId(class2spec, typedNodes), 5..25, 25)
     val integerSample = stringSample.toIntegerSample()
 
-    save(ktFile, from, listOf(from.parent))
+    val notFinished = mutableListOf(from.parent)
+    while (notFinished.last() !== ktFile) {
+        notFinished += notFinished.last().parent
+    }
+
+    save(ktFile, from, notFinished)
 
     return Pair(integerSample.json(), typesFromFile.convertToJson())
 }
