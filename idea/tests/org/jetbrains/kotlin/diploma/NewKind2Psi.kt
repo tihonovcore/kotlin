@@ -25,8 +25,8 @@ class NewKind2Psi(project: Project) {
                 }
             }
             "FILE" -> {
-                val emptyFile = factory.createPhysicalFile("context", "")
-                factory.createAnalyzableFile("from_kind_2_psi", "", emptyFile)
+                val emptyFile = factory.createPhysicalFile("context.kt", "")
+                factory.createAnalyzableFile("from_kind_2_psi.kt", "", emptyFile)
             }
             else -> {
                 val element = file.find(predictedNodeKind) ?: throw IllegalArgumentException("<!! expected $predictedNodeKind !!>")

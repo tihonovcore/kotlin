@@ -41,7 +41,6 @@ fun save(
 ) {
     val json = file.encode(except, notFinished).json()
     File(ast).writeText(json)
-    File(attempts).writeText("{ \"attempts\": 0 }")
 }
 
 /**

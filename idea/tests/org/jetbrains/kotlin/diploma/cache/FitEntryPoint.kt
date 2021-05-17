@@ -46,6 +46,7 @@ fun extractPathsFrom(path: String, project: Project): Pair<String, String> {
     }
 
     save(ktFile, from, notFinished)
+    attempts(new = 0)
 
     return Pair(integerSample.json(), typesFromFile.convertToJson())
 }
@@ -55,12 +56,14 @@ private const val MAX_ATTEMPTS = 6
 fun workWithPrediction(kind: String, type: Int, project: Project): KotlinResponse {
     val attempts = attempts()
     val (file, notFinished) = load(project)
-    //TODO: load context
+    //TODO: saving and loading `typedNodes` is good practice, because
+    // analysing some AST is impossible (e.g. binary_expression without operation node)
+    // In this case `checkFile` says, that there are no one typed node
     val nodeForChildAddition = findNodeForChildAddition(file, notFinished) as KtElement
 
     try {
         val kind2Psi = NewKind2Psi(project)
-        val decodedChild = kind2Psi.decode(kind)
+        val decodedChild = kind2Psi.decode(kind).apply { children.forEach { it.delete() } }
         val appended = nodeForChildAddition.append(decodedChild)
         notFinished += appended
 

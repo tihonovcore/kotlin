@@ -89,7 +89,14 @@ fun List<StringDatasetSample>.skipTooBig(): List<StringDatasetSample> {
 }
 
 fun KtElement.append(new: KtElement): KtElement {
-    if (this is KtBlockExpression || this is KtClassBody || this is KtParameterList || this is KtStringTemplateExpression) {
+    if (this is KtBlockExpression ||
+        this is KtClassBody ||
+        this is KtParameterList ||
+        this is KtValueArgumentList ||
+        this is KtTypeParameterList ||
+        this is KtTypeArgumentList ||
+        this is KtStringTemplateExpression
+    ) {
         val rightBrace = node.lastChildNode
         node.addChild(new.node, rightBrace)
         return this.children.last() as KtElement
