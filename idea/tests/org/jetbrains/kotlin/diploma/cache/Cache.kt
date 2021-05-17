@@ -10,13 +10,12 @@ import com.google.gson.JsonParser
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.impl.source.tree.LeafPsiElement
+import com.intellij.psi.tree.IElementType
+import org.jetbrains.annotations.NotNull
 import org.jetbrains.kotlin.diploma.NewKind2Psi
 import org.jetbrains.kotlin.diploma.json
 import org.jetbrains.kotlin.diploma.kind
-import org.jetbrains.kotlin.lexer.KtKeywordToken
-import org.jetbrains.kotlin.lexer.KtModifierKeywordToken
-import org.jetbrains.kotlin.lexer.KtSingleValueToken
-import org.jetbrains.kotlin.lexer.KtToken
+import org.jetbrains.kotlin.lexer.*
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtPsiFactory
 import org.jetbrains.kotlin.psi.psiUtil.children
@@ -24,6 +23,8 @@ import java.io.File
 
 private const val ast = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/cache/cacheExample.json"
 private const val attempts = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/cache/attempts.json"
+
+private val ktTokensInstance = object : KtTokens {}
 
 fun attempts(): Int {
     return JsonParser.parseString(File(attempts).readText()).asJsonObject["attempts"].asInt
@@ -80,7 +81,7 @@ private fun PsiElement.encode(
         }
 
         if (child.psi is LeafPsiElement) {
-            val kind = child.elementType::class.java.simpleName
+            val kind = KtTokens::class.java.fields.find { it.get(ktTokensInstance) === child.elementType }!!.name
             val text = child.text
 
             tree.children += JsonTree(kind, text)
@@ -93,13 +94,11 @@ private fun PsiElement.encode(
 }
 
 private fun JsonTree.decode(kind2Psi: NewKind2Psi, factory: KtPsiFactory, notFinished: MutableList<PsiElement>): PsiElement {
-    val element = when (kind) {
-        "IElementType" -> factory.createWhiteSpace(text)
-        "KtModifierKeywordToken" -> LeafPsiElement(KtModifierKeywordToken.keywordModifier(text), text)
-        "KtKeywordToken" -> LeafPsiElement(KtKeywordToken.keyword(text), text)
-        "KtSingleValueToken" -> LeafPsiElement(KtSingleValueToken("LOAD_CACHE", text), text)
-        "KtToken" -> LeafPsiElement(KtToken("LOAD_CACHE"), text)
-        else -> kind2Psi.decode(kind).apply { deleteChildRange(firstChild, lastChild) }
+    val tokenTypeOrNull = KtTokens::class.java.fields.find { it.name == kind }
+    val element = if (tokenTypeOrNull != null) {
+        LeafPsiElement(tokenTypeOrNull.get(ktTokensInstance) as @NotNull IElementType, text)
+    } else {
+        kind2Psi.decode(kind).apply { deleteChildRange(firstChild, lastChild) }
     }
 
     children.forEach { child ->
