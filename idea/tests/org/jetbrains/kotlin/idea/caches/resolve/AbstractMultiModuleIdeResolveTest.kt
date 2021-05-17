@@ -70,11 +70,10 @@ abstract class AbstractMultiModuleIdeResolveTest : AbstractMultiModuleTest() {
 
             val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
             val typesFromFile = extractTypes(sourceKtFile)
-            val class2spec = typesFromFile.second
             val (typedNodes, hasCompileErrors) = checkFile(sourceKtFile)
 
             try {
-                val samples = createSamplesForDataset(sourceKtFile, getMapPsiToTypeId(class2spec, typedNodes), 5..25, 25).skipTooBig()
+                val samples = createSamplesForDataset(sourceKtFile, getMapPsiToTypeId(typesFromFile.class2spec, typedNodes), 5..25, 25).skipTooBig()
                 val directory = Files.createTempDirectory(Paths.get(stringDatasetDirectory), file.name).toAbsolutePath()
                 val pathsDirectory = "$directory/paths".also { File(it).mkdirs() }
 
@@ -512,7 +511,8 @@ fun getMapPsiToTypeId(
     typedNodes: List<TypedNode>
 ): Map<PsiElement, Int> {
     return typedNodes.mapNotNull {
-        val typeDescriptor = it.type.constructor.declarationDescriptor!!
+        val type = it.type ?: return@mapNotNull null
+        val typeDescriptor = type.constructor.declarationDescriptor!!
         val node = it.node
         val typeId = class2spec[typeDescriptor]?.id ?: return@mapNotNull null
         node to typeId
@@ -521,7 +521,11 @@ fun getMapPsiToTypeId(
 
 fun checkFile(file: KtFile): Pair<List<TypedNode>, Boolean> {
     val resolutionFacade = file.getResolutionFacade()
-    val (bindingContext, moduleDescriptor) = resolutionFacade.analyzeWithAllCompilerChecks(listOf(file))
+    val (bindingContext, moduleDescriptor) = try {
+        resolutionFacade.analyzeWithAllCompilerChecks(listOf(file))
+    } catch (e: Exception) {
+        return Pair(emptyList(), true)
+    }
 
     val directives = KotlinTestUtils.parseDirectives(file.text)
     val diagnosticsFilter = BaseDiagnosticsTest.parseDiagnosticFilterDirective(directives, allowUnderscoreUsage = false)

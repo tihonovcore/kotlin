@@ -10,7 +10,7 @@ import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
 import org.jetbrains.kotlin.types.KotlinType
 
 data class TypedNode(
-    val type: KotlinType,
+    val type: KotlinType?,
     val node: PsiElement,
     val context: List<DeclarationDescriptor>
 )

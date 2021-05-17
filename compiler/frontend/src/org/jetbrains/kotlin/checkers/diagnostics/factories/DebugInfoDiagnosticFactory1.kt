@@ -66,9 +66,7 @@ class DebugInfoDiagnosticFactory1 : DiagnosticFactory1<PsiElement, String>,
                 moduleDescriptor
             ).first
 
-            if (type != null) {
-                typedNodes += TypedNode(type, expression, types.toList())
-            }
+            typedNodes += TypedNode(type, expression, types.toList())
 
             val declarationDescriptor = type?.constructor?.declarationDescriptor
             val supertypes = type?.constructor?.supertypes?.toString() ?: ""

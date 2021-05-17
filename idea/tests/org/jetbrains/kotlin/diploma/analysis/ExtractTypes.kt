@@ -17,7 +17,13 @@ import org.jetbrains.kotlin.psi.psiUtil.containingClassOrObject
 import org.jetbrains.kotlin.resolve.scopes.getDescriptorsFiltered
 import org.jetbrains.kotlin.types.typeUtil.supertypes
 
-fun extractTypes(file: KtFile): Pair<List<JsonFunctionSpec>, Map<ClassifierDescriptor, JsonClassSpec>> {
+data class ExtractedTypes(
+    val functionDescriptors: List<FunctionDescriptor>,
+    val functionSpecifications: List<JsonFunctionSpec>,
+    val class2spec:Map<ClassifierDescriptor, JsonClassSpec>
+)
+
+fun extractTypes(file: KtFile): ExtractedTypes {
     val classes = mutableListOf<ClassifierDescriptor>()
     val functions = mutableListOf<FunctionDescriptor>()
 
@@ -47,7 +53,8 @@ fun extractTypes(file: KtFile): Pair<List<JsonFunctionSpec>, Map<ClassifierDescr
 
     removeLoops(class2spec)
 
-    return Pair(functionSpecs, class2spec).withIntSpecification()
+    val (jsonFunctionSpecs, jsonClass2spec) = Pair(functionSpecs, class2spec).withIntSpecification()
+    return ExtractedTypes(functions, jsonFunctionSpecs, jsonClass2spec)
 }
 
 private fun buildSpecifications(classes: List<ClassifierDescriptor>, functions: List<FunctionDescriptor>): Pair<List<FunctionSpec>, Map<ClassifierDescriptor, ClassSpec>> {
@@ -198,9 +205,9 @@ fun Pair<List<FunctionSpec>, Map<ClassifierDescriptor, ClassSpec>>.withIntSpecif
     return Pair(functions, classes)
 }
 
-fun Pair<List<JsonFunctionSpec>, Map<ClassifierDescriptor, JsonClassSpec>>.convertToJson(): String {
-    val f = Gson().toJson(first)
-    val c = Gson().toJson(second.values.sortedBy { it.id })
+fun ExtractedTypes.convertToJson(): String {
+    val f = Gson().toJson(functionSpecifications)
+    val c = Gson().toJson(class2spec.values.sortedBy { it.id })
 
     return "{\n    \"classes\":$c,\n    \"functions\":$f\n}"
 }

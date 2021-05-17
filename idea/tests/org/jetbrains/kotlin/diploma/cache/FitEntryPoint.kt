@@ -10,19 +10,15 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiManager
 import com.intellij.psi.impl.source.tree.LeafPsiElement
 import org.jetbrains.kotlin.checkers.utils.TypedNode
-import org.jetbrains.kotlin.descriptors.ClassifierDescriptor
-import org.jetbrains.kotlin.descriptors.PropertyDescriptor
+import org.jetbrains.kotlin.descriptors.*
 import org.jetbrains.kotlin.diploma.*
 import org.jetbrains.kotlin.diploma.analysis.convertToJson
 import org.jetbrains.kotlin.diploma.analysis.extractTypes
 import org.jetbrains.kotlin.idea.caches.resolve.checkFile
 import org.jetbrains.kotlin.idea.caches.resolve.getMapPsiToTypeId
 import org.jetbrains.kotlin.idea.core.util.toVirtualFile
-import org.jetbrains.kotlin.lexer.KtToken
 import org.jetbrains.kotlin.lexer.KtTokens
-import org.jetbrains.kotlin.psi.KtElement
-import org.jetbrains.kotlin.psi.KtFile
-import org.jetbrains.kotlin.psi.KtReferenceExpression
+import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.children
 import java.io.File
 
@@ -34,10 +30,9 @@ fun extractPathsFrom(path: String, project: Project): Pair<String, String> {
 
     val ktFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
     val typesFromFile = extractTypes(ktFile)
-    val class2spec = typesFromFile.second
     val (typedNodes, hasCompileErrors) = checkFile(ktFile)
 
-    val (stringSample, from) = createSampleForFit(ktFile, getMapPsiToTypeId(class2spec, typedNodes), 5..25, 25)
+    val (stringSample, from) = createSampleForFit(ktFile, getMapPsiToTypeId(typesFromFile.class2spec, typedNodes), 5..25, 25)
     val integerSample = stringSample.toIntegerSample()
 
     val notFinished = mutableListOf(from.parent)
@@ -51,7 +46,7 @@ fun extractPathsFrom(path: String, project: Project): Pair<String, String> {
     return Pair(integerSample.json(), typesFromFile.convertToJson())
 }
 
-private const val MAX_ATTEMPTS = 6
+private const val MAX_ATTEMPTS = 10
 
 fun workWithPrediction(kind: String, type: Int, project: Project): KotlinResponse {
     val attempts = attempts()
@@ -67,22 +62,25 @@ fun workWithPrediction(kind: String, type: Int, project: Project): KotlinRespons
         val appended = nodeForChildAddition.append(decodedChild)
         notFinished += appended
 
-        //TODO: if current node is KtExpression and has NOT type, set predicted
         val (typedNodes, _) = checkFile(file)
         val typesFromFile = extractTypes(file)
-        val class2spec = typesFromFile.second
 
-        if (appended is KtReferenceExpression) {
-            val typedChild = typedNodes.find { it.node === appended } ?: throw Exception("expression hasn't type :(")
-            val suitableIdentifiers = typedChild.context.filter { class2spec[it.original as? ClassifierDescriptor]?.id == type }
-
-            if (suitableIdentifiers.isNotEmpty()) {
-                val name = (suitableIdentifiers.shuffled().first() as PropertyDescriptor).name.toString()
-                val old = appended.node.children().find { it is KtToken && it.elementType === KtTokens.IDENTIFIER }!!
-
-                appended.node.replaceChild(old, LeafPsiElement(KtTokens.IDENTIFIER, name))
+        if (appended is KtNameReferenceExpression) {
+            val oldIdentifier = appended.node.children().find { it.elementType === KtTokens.IDENTIFIER }!!
+            val newIdentifier = when (nodeForChildAddition) {
+                //TODO: choose based on predicted type?
+                is KtCallExpression -> typesFromFile.functionDescriptors.shuffled().first().name
+                is KtUserType -> typesFromFile.class2spec.values.shuffled().first().name
+                else -> findVisibleProperties(file, appended, typedNodes).shuffled().first().name
             }
+
+            appended.node.replaceChild(oldIdentifier, LeafPsiElement(KtTokens.IDENTIFIER, newIdentifier.toString()))
         }
+
+        if (appended is KtExpression) {
+            //TODO: if current node is KtExpression and has NOT type, set predicted
+        }
+
         save(file, notFinished = notFinished)
         return extractPaths(file, notFinished, typedNodes)
     } catch (_: Pipeline.AfterLastException) {
@@ -115,12 +113,11 @@ private fun findNodeForChildAddition(element: PsiElement, notFinished: List<PsiE
 
 private fun extractPaths(file: KtFile, notFinished: List<PsiElement>, typedNodes: List<TypedNode>): Paths {
     val typesFromFile = extractTypes(file)
-    val class2spec = typesFromFile.second
     val stringSample = createSampleForPredict(
         file,
         findNodeForChildAddition(file, notFinished),
         notFinished.filterIsInstance(KtElement::class.java),
-        getMapPsiToTypeId(class2spec, typedNodes)
+        getMapPsiToTypeId(typesFromFile.class2spec, typedNodes)
     )
     val integerSample = stringSample.toIntegerSample()
     return Paths(integerSample.json(), typesFromFile.convertToJson())
@@ -130,3 +127,22 @@ sealed class KotlinResponse
 object Success : KotlinResponse()
 object Fail : KotlinResponse()
 class Paths(val integerDatasetJson: String, val typesInfoJson: String) : KotlinResponse()
+
+private fun findVisibleProperties(
+    file: KtFile,
+    appended: PsiElement,
+    typedNodes: List<TypedNode>
+): List<PropertyDescriptor> {
+    var current = appended
+    while (current !== file) {
+        val typedChild = typedNodes.find { it.node === appended }
+        if (typedChild == null || typedChild.context.isEmpty()) {
+            current = current.parent
+            continue
+        }
+
+        return typedChild.context.map { it as PropertyDescriptor }
+    }
+
+    throw Exception("no visible properties :(")
+}
