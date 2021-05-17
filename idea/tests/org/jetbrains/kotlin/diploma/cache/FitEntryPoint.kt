@@ -8,15 +8,22 @@ package org.jetbrains.kotlin.diploma.cache
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiManager
+import com.intellij.psi.impl.source.tree.LeafPsiElement
 import org.jetbrains.kotlin.checkers.utils.TypedNode
+import org.jetbrains.kotlin.descriptors.ClassifierDescriptor
+import org.jetbrains.kotlin.descriptors.PropertyDescriptor
 import org.jetbrains.kotlin.diploma.*
 import org.jetbrains.kotlin.diploma.analysis.convertToJson
 import org.jetbrains.kotlin.diploma.analysis.extractTypes
 import org.jetbrains.kotlin.idea.caches.resolve.checkFile
 import org.jetbrains.kotlin.idea.caches.resolve.getMapPsiToTypeId
 import org.jetbrains.kotlin.idea.core.util.toVirtualFile
+import org.jetbrains.kotlin.lexer.KtToken
+import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.KtElement
 import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.KtReferenceExpression
+import org.jetbrains.kotlin.psi.psiUtil.children
 import java.io.File
 
 /**
@@ -49,7 +56,27 @@ fun workWithPrediction(kind: String, type: Int, project: Project): KotlinRespons
     try {
         val kind2Psi = NewKind2Psi(project)
         val decodedChild = kind2Psi.decode(kind)
-        nodeForChildAddition.append(decodedChild)
+        val appended = nodeForChildAddition.append(decodedChild)
+        notFinished += appended
+
+        //TODO: if current node is KtExpression and has NOT type, set predicted
+        val (typedNodes, _) = checkFile(file)
+        val typesFromFile = extractTypes(file)
+        val class2spec = typesFromFile.second
+
+        if (appended is KtReferenceExpression) {
+            val typedChild = typedNodes.find { it.node === appended } ?: throw Exception("expression hasn't type :(")
+            val suitableIdentifiers = typedChild.context.filter { class2spec[it.original as? ClassifierDescriptor]?.id == type }
+
+            if (suitableIdentifiers.isNotEmpty()) {
+                val name = (suitableIdentifiers.shuffled().first() as PropertyDescriptor).name.toString()
+                val old = appended.node.children().find { it is KtToken && it.elementType === KtTokens.IDENTIFIER }!!
+
+                appended.node.replaceChild(old, LeafPsiElement(KtTokens.IDENTIFIER, name))
+            }
+        }
+        save(file, notFinished = notFinished)
+        return extractPaths(file, notFinished, typedNodes)
     } catch (_: Pipeline.AfterLastException) {
         notFinished.removeIf { it === nodeForChildAddition }
 
@@ -66,11 +93,6 @@ fun workWithPrediction(kind: String, type: Int, project: Project): KotlinRespons
             return Success
         }
     }
-
-    //TODO: for REF_EXPR get name based on context
-    save(file, notFinished = notFinished)
-    val (typedNodes, _) = checkFile(file)
-    return extractPaths(file, notFinished, typedNodes)
 }
 
 private fun findNodeForChildAddition(element: PsiElement, notFinished: List<PsiElement>): PsiElement {
