@@ -21,8 +21,10 @@ import org.jetbrains.kotlin.descriptors.ClassifierDescriptor
 import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.diploma.*
 import org.jetbrains.kotlin.diploma.analysis.*
+import org.jetbrains.kotlin.diploma.cache.extractPathsFrom
 import org.jetbrains.kotlin.diploma.cache.load
 import org.jetbrains.kotlin.diploma.cache.save
+import org.jetbrains.kotlin.diploma.cache.workWithPrediction
 import org.jetbrains.kotlin.idea.codeInsight.ReferenceVariantsHelper
 import org.jetbrains.kotlin.idea.core.util.toVirtualFile
 import org.jetbrains.kotlin.idea.project.KotlinMultiplatformAnalysisModeComponent
@@ -503,6 +505,34 @@ class PathExtractor : AbstractMultiModuleIdeResolveTest() {
         }
 
         File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/parentChild.json").writeText(parentChild.json())
+    }
+}
+
+class ExtractPaths() : AbstractMultiModuleIdeResolveTest() {
+    override fun getTestDataPath(): String = PluginTestCaseBase.getTestDataPathBase()
+
+    @TestMetadata("lalal")
+    fun testTTT() {
+        val file = File("/home/tihonovcore/diploma/kotlin/compiler/testData/codegen/box/typeInfo/primitiveTypeInfo.kt")
+        val (sample, types) = extractPathsFrom(file.path, project)
+
+        File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/sample.json").writeText(sample)
+        File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/types.json").writeText(types)
+
+        throw Exception("OK")
+    }
+}
+
+class OnPredict() : AbstractMultiModuleIdeResolveTest() {
+    override fun getTestDataPath(): String = PluginTestCaseBase.getTestDataPathBase()
+
+    @TestMetadata("alalal")
+    fun testTTT() {
+        val json = File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/prediction.json").readText()
+        val (kind, type) = JsonParser.parseString(json).asJsonObject.let { it["kind"].asString to it["type"].asInt }
+        workWithPrediction(kind, type, project)
+
+        throw Exception("OK")
     }
 }
 
