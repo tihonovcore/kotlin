@@ -512,19 +512,18 @@ fun getMapPsiToTypeId(
 ): Map<PsiElement, Int> {
     return typedNodes.mapNotNull {
         val type = it.type ?: return@mapNotNull null
-        val typeDescriptor = type.constructor.declarationDescriptor!!
         val node = it.node
-        val typeId = class2spec[typeDescriptor]?.id ?: return@mapNotNull null
+        val typeId = class2spec[type]?.id ?: return@mapNotNull null
         node to typeId
     }.associate { it }
 }
 
-fun checkFile(file: KtFile): Pair<List<TypedNode>, Boolean> {
+fun checkFile(file: KtFile): Pair<MutableList<TypedNode>, Boolean> {
     val resolutionFacade = file.getResolutionFacade()
     val (bindingContext, moduleDescriptor) = try {
         resolutionFacade.analyzeWithAllCompilerChecks(listOf(file))
     } catch (e: Exception) {
-        return Pair(emptyList(), true)
+        return Pair(mutableListOf(), true)
     }
 
     val directives = KotlinTestUtils.parseDirectives(file.text)
@@ -555,7 +554,7 @@ fun checkFile(file: KtFile): Pair<List<TypedNode>, Boolean> {
         typedNodes = extractedTypes
     ).filter { diagnosticsFilter.value(it.diagnostic) }
 
-    println()
+    print("")
 
 //        val actualTextWithDiagnostics = CheckerTestUtil.addDiagnosticMarkersToText(
 //            file,

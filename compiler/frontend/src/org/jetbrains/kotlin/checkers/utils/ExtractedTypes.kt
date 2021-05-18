@@ -7,10 +7,9 @@ package org.jetbrains.kotlin.checkers.utils
 
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
-import org.jetbrains.kotlin.types.KotlinType
 
 data class TypedNode(
-    val type: KotlinType?,
+    var type: DeclarationDescriptor?,
     val node: PsiElement,
     val context: List<DeclarationDescriptor>
 )

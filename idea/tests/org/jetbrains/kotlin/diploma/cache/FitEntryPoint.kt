@@ -64,6 +64,7 @@ fun workWithPrediction(kind: String, type: Int, project: Project): KotlinRespons
 
         val (typedNodes, _) = checkFile(file)
         val typesFromFile = extractTypes(file)
+        val predictedType = typesFromFile.class2spec.entries.find { it.value.id == type }?.key
 
         if (appended is KtNameReferenceExpression) {
             val oldIdentifier = appended.node.children().find { it.elementType === KtTokens.IDENTIFIER }!!
@@ -71,14 +72,22 @@ fun workWithPrediction(kind: String, type: Int, project: Project): KotlinRespons
                 //TODO: choose based on predicted type?
                 is KtCallExpression -> typesFromFile.functionDescriptors.shuffled().first().name
                 is KtUserType -> typesFromFile.class2spec.values.shuffled().first().name
-                else -> findVisibleProperties(file, appended, typedNodes).shuffled().first().name
+                else -> findVisibleProperties(file, appended, typedNodes, predictedType).shuffled().first().name
             }
 
             appended.node.replaceChild(oldIdentifier, LeafPsiElement(KtTokens.IDENTIFIER, newIdentifier.toString()))
         }
 
-        if (appended is KtExpression) {
-            //TODO: if current node is KtExpression and has NOT type, set predicted
+        if (appended is KtExpression && predictedType != null) {
+            val typedAppended = typedNodes.find { it.node === appended }
+
+            if (typedAppended == null) {
+                typedNodes += TypedNode(predictedType, appended, emptyList())
+            } else {
+                if (typedAppended.type == null) { //иначе по идее надо сообщить модели о неправильном типе
+                    typedAppended.type = predictedType
+                }
+            }
         }
 
         save(file, notFinished = notFinished)
@@ -131,7 +140,8 @@ class Paths(val integerDatasetJson: String, val typesInfoJson: String) : KotlinR
 private fun findVisibleProperties(
     file: KtFile,
     appended: PsiElement,
-    typedNodes: List<TypedNode>
+    typedNodes: List<TypedNode>,
+    predictedType: ClassifierDescriptor?
 ): List<PropertyDescriptor> {
     var current = appended
     while (current !== file) {
@@ -141,7 +151,12 @@ private fun findVisibleProperties(
             continue
         }
 
-        return typedChild.context.map { it as PropertyDescriptor }
+        val allProperties = typedChild.context.map { it as PropertyDescriptor }
+        val propertiesWithSuitableType = allProperties.filter {
+            val descriptor = it.type.constructor.declarationDescriptor
+            descriptor != null && descriptor === predictedType
+        }
+        return propertiesWithSuitableType.ifEmpty { allProperties }
     }
 
     throw Exception("no visible properties :(")
