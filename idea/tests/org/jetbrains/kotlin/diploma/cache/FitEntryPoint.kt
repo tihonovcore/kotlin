@@ -63,7 +63,7 @@ fun workWithPrediction(kind: String, type: Int, project: Project): KotlinRespons
         notFinished += appended
 
         val (typedNodes, _) = checkFile(file)
-        val typesFromFile = extractTypes(file)
+        val typesFromFile = extractTypes(file) //TODO: makes empty `ExtractedTypes` on error
         val predictedType = typesFromFile.class2spec.entries.find { it.value.id == type }?.key
 
         if (appended is KtNameReferenceExpression) {
@@ -80,14 +80,9 @@ fun workWithPrediction(kind: String, type: Int, project: Project): KotlinRespons
 
         if (appended is KtExpression && predictedType != null) {
             val typedAppended = typedNodes.find { it.node === appended }
-
-            if (typedAppended == null) {
-                typedNodes += TypedNode(predictedType, appended, emptyList())
-            } else {
-                if (typedAppended.type == null) { //иначе по идее надо сообщить модели о неправильном типе
-                    typedAppended.type = predictedType
-                }
-            }
+            val realType = typedAppended?.type
+            val realTypeId = typesFromFile.class2spec[realType]?.id
+            saveRealTypeId(realTypeId)
         }
 
         save(file, notFinished = notFinished)
@@ -160,4 +155,8 @@ private fun findVisibleProperties(
     }
 
     throw Exception("no visible properties :(")
+}
+
+private fun saveRealTypeId(realTypeId: Int?) {
+    File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/realType.json").writeText("" + realTypeId)
 }
