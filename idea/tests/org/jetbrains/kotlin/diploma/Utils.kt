@@ -62,7 +62,7 @@ fun File.mustBeSkipped(): Boolean {
         contains(Regex("//\\s*?FILE:"))
                 || contains(Regex("//\\s*?WITH_RUNTIME"))
                 || contains(Regex("//\\s*?FILE: .*?\\.java"))
-                || name in listOf("kt30402.kt", "crossTypeEquals.kt")
+                || name in listOf("kt30402.kt", "crossTypeEquals.kt", "jsNative.kt")
     }
 }
 

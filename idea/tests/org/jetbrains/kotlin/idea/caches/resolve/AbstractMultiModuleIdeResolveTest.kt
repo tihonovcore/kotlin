@@ -374,15 +374,20 @@ class PathExtractor : AbstractMultiModuleIdeResolveTest() {
     fun testShowKindExamples() {
         val vocabulary = mutableSetOf<String>()
 
+        val allFiles = mutableListOf<File>()
         File(sourceCodeDirectory).walkTopDown().forEach { file ->
             if (file.mustBeSkipped()) return@forEach
+            allFiles += file
+        }
 
-            val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
-            fun KtElement.dfs(): List<KtElement> {
-                return children.filterIsInstance(KtElement::class.java).fold(mutableListOf(this)) { accum, child ->
-                    accum.apply { this += child.dfs() }
-                }
+        fun KtElement.dfs(): List<KtElement> {
+            return children.filterIsInstance(KtElement::class.java).fold(mutableListOf(this)) { accum, child ->
+                accum.apply { this += child.dfs() }
             }
+        }
+
+        for (file in allFiles.shuffled()) {
+            val sourceKtFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
 
             sourceKtFile.dfs().forEach ff@{
                 val kind = it.kind()
