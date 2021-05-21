@@ -37,16 +37,23 @@ fun attempts(new: Int) {
 fun save(
     file: KtFile,
     except: PsiElement? = null,
-    notFinished: List<PsiElement> = emptyList()
+    notFinished: List<PsiElement> = emptyList(),
+    predictedTypes: Map<PsiElement, Int> = emptyMap()
 ) {
-    val json = file.encode(except, notFinished).json()
+    val json = file.encode(except, notFinished, predictedTypes).json()
     File(ast).writeText(json)
 }
+
+data class Loaded(
+    val file: KtFile,
+    val notFinished: MutableList<PsiElement>,
+    val predictedTypes: MutableMap<PsiElement, Int>
+)
 
 /**
  * @return decoded file and list of not finished elements
  */
-fun load(project: Project): Pair<KtFile, MutableList<PsiElement>> {
+fun load(project: Project): Loaded {
     val json = File(ast).readText()
 
     val tree = Gson().fromJson(json, JsonTree::class.java)
@@ -54,21 +61,25 @@ fun load(project: Project): Pair<KtFile, MutableList<PsiElement>> {
     val kind2Psi = NewKind2Psi(project)
 
     val notFinished = mutableListOf<PsiElement>()
-    return tree.decode(kind2Psi, factory, notFinished) as KtFile to notFinished
+    val predictedTypes = mutableMapOf<PsiElement, Int>()
+    val file = tree.decode(kind2Psi, factory, notFinished, predictedTypes) as KtFile
+    return Loaded(file, notFinished, predictedTypes)
 }
 
 private data class JsonTree(
     val kind: String,
     val text: String = "",
     var finished: Boolean = true,
+    val predictedType: Int? = null,
     val children: MutableList<JsonTree> = mutableListOf()
 )
 
 private fun PsiElement.encode(
     except: PsiElement? = null,
-    notFinished: List<PsiElement>
+    notFinished: List<PsiElement>,
+    predictedTypes: Map<PsiElement, Int>
 ): JsonTree {
-    val tree = JsonTree(kind = kind())
+    val tree = JsonTree(kind = kind(), predictedType = predictedTypes[this])
     if (notFinished.any { it === this }) {
         tree.finished = false
     }
@@ -85,14 +96,19 @@ private fun PsiElement.encode(
 
             tree.children += JsonTree(kind, text)
         } else if (!skipInnerNodes) {
-            tree.children += child.psi.encode(except, notFinished)
+            tree.children += child.psi.encode(except, notFinished, predictedTypes)
         }
     }
 
     return tree
 }
 
-private fun JsonTree.decode(kind2Psi: NewKind2Psi, factory: KtPsiFactory, notFinished: MutableList<PsiElement>): PsiElement {
+private fun JsonTree.decode(
+    kind2Psi: NewKind2Psi,
+    factory: KtPsiFactory,
+    notFinished: MutableList<PsiElement>,
+    predictedTypes: MutableMap<PsiElement, Int>
+): PsiElement {
     val tokenTypeOrNull = KtTokens::class.java.fields.find { it.name == kind }
     val element = if (tokenTypeOrNull != null) {
         LeafPsiElement(tokenTypeOrNull.get(ktTokensInstance) as @NotNull IElementType, text)
@@ -101,12 +117,16 @@ private fun JsonTree.decode(kind2Psi: NewKind2Psi, factory: KtPsiFactory, notFin
     }
 
     children.forEach { child ->
-        val decodedChild = child.decode(kind2Psi, factory, notFinished)
+        val decodedChild = child.decode(kind2Psi, factory, notFinished, predictedTypes)
         element.node.addChild(decodedChild.node)
     }
 
     if (!finished) {
         notFinished += element
+    }
+
+    if (predictedType != null) {
+        predictedTypes[element] = predictedType
     }
 
     return element

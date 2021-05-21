@@ -12,6 +12,7 @@ import com.intellij.psi.impl.source.tree.LeafPsiElement
 import org.jetbrains.kotlin.checkers.utils.TypedNode
 import org.jetbrains.kotlin.descriptors.*
 import org.jetbrains.kotlin.diploma.*
+import org.jetbrains.kotlin.diploma.analysis.ExtractedTypes
 import org.jetbrains.kotlin.diploma.analysis.convertToJson
 import org.jetbrains.kotlin.diploma.analysis.extractTypes
 import org.jetbrains.kotlin.idea.caches.resolve.checkFile
@@ -50,7 +51,7 @@ private const val MAX_ATTEMPTS = 10
 
 fun workWithPrediction(kind: String, type: Int, project: Project): KotlinResponse {
     val attempts = attempts()
-    val (file, notFinished) = load(project)
+    val (file, notFinished, predictedTypes) = load(project)
     //TODO: saving and loading `typedNodes` is good practice, because
     // analysing some AST is impossible (e.g. binary_expression without operation node)
     // In this case `checkFile` says, that there are no one typed node
@@ -78,31 +79,48 @@ fun workWithPrediction(kind: String, type: Int, project: Project): KotlinRespons
             appended.node.replaceChild(oldIdentifier, LeafPsiElement(KtTokens.IDENTIFIER, newIdentifier.toString()))
         }
 
-        if (appended is KtExpression && predictedType != null) {
-            val typedAppended = typedNodes.find { it.node === appended }
-            val realType = typedAppended?.type
-            val realTypeId = typesFromFile.class2spec[realType]?.id
-            saveRealTypeId(realTypeId)
-        }
+        predictedTypes[appended] = type
 
-        save(file, notFinished = notFinished)
+        save(file, notFinished = notFinished, predictedTypes = predictedTypes)
         return extractPaths(file, notFinished, typedNodes)
     } catch (_: Pipeline.AfterLastException) {
         notFinished.removeIf { it === nodeForChildAddition }
 
         val (typedNodes, hasCompileErrors) = checkFile(file)
+        val typesFromFile = extractTypes(file)
         if (hasCompileErrors) {
             if (attempts < MAX_ATTEMPTS) {
                 attempts(new = attempts + 1)
-                save(file, notFinished = notFinished)
+                save(file, notFinished = notFinished, predictedTypes = predictedTypes)
                 return extractPaths(file, notFinished, typedNodes)
             } else {
-                return Fail
+                return Fail(comparePredictedAndRealTypes(file, typedNodes, typesFromFile, predictedTypes))
             }
         } else {
-            return Success
+            return Success(comparePredictedAndRealTypes(file, typedNodes, typesFromFile, predictedTypes))
         }
     }
+}
+
+private fun comparePredictedAndRealTypes(
+    element: PsiElement,
+    typedNodes: List<TypedNode>,
+    typesFromFile: ExtractedTypes,
+    predictedTypes: Map<PsiElement, Int>
+): List<Boolean> {
+    val answerForChildren = element.children.flatMap { comparePredictedAndRealTypes(it, typedNodes, typesFromFile, predictedTypes) }
+    
+    if (element !in predictedTypes) {
+        return answerForChildren
+    }
+    
+    val typedNode = typedNodes.find { it.node === element }
+    val realType = typedNode?.type
+    
+    val realTypeId = typesFromFile.class2spec[realType]?.id
+    val actualTypeId = predictedTypes[element]
+    
+    return listOf(realTypeId == actualTypeId) + answerForChildren
 }
 
 private fun findNodeForChildAddition(element: PsiElement, notFinished: List<PsiElement>): PsiElement {
@@ -128,8 +146,8 @@ private fun extractPaths(file: KtFile, notFinished: List<PsiElement>, typedNodes
 }
 
 sealed class KotlinResponse
-object Success : KotlinResponse()
-object Fail : KotlinResponse()
+class Success(val typeComparison: List<Boolean>) : KotlinResponse()
+class Fail(val typeComparison: List<Boolean>) : KotlinResponse()
 class Paths(val integerDatasetJson: String, val typesInfoJson: String) : KotlinResponse()
 
 private fun findVisibleProperties(
@@ -155,8 +173,4 @@ private fun findVisibleProperties(
     }
 
     throw Exception("no visible properties :(")
-}
-
-private fun saveRealTypeId(realTypeId: Int?) {
-    File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/realType.json").writeText("" + realTypeId)
 }

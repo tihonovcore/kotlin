@@ -454,9 +454,7 @@ class PathExtractor : AbstractMultiModuleIdeResolveTest() {
             save(sourceKtFile, except)
             val (loaded, notFinished) = load(project)
 
-            println(loaded.text)
-
-            return
+            println(load(project).file.text)
         }
     }
 
@@ -515,6 +513,7 @@ val request = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/
 val answer = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/answer.txt"
 val paths = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/paths.json"
 val types = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/types.json"
+val compareTypes = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/compareTypes.txt"
 
 class ExtractPaths : AbstractMultiModuleIdeResolveTest() {
     override fun getTestDataPath(): String = PluginTestCaseBase.getTestDataPathBase()
@@ -556,8 +555,14 @@ class OnPredict : AbstractMultiModuleIdeResolveTest() {
                     File(paths).writeText(result.integerDatasetJson)
                     File(types).writeText(result.typesInfoJson)
                 }
-                is Success -> answerFile.writeText("SUCC")
-                is Fail -> answerFile.writeText("FAIL")
+                is Success -> {
+                    answerFile.writeText("SUCC")
+                    File(compareTypes).writeText(result.typeComparison.joinToString("\n"))
+                }
+                is Fail -> {
+                    answerFile.writeText("FAIL")
+                    File(compareTypes).writeText(result.typeComparison.joinToString("\n"))
+                }
             }
         } catch (e: Throwable) {
             File(answer).writeText("ERROR: ${e.stackTraceToString()} \n ${e.cause} \n ${e.message}")
