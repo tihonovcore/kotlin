@@ -510,19 +510,31 @@ class PathExtractor : AbstractMultiModuleIdeResolveTest() {
     }
 }
 
+val cachedTypeIds = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/cachedTypeIds.json"
+val request = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/request.txt"
+val answer = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/answer.txt"
+val paths = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/paths.json"
+val types = "/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/types.json"
+
 class ExtractPaths : AbstractMultiModuleIdeResolveTest() {
     override fun getTestDataPath(): String = PluginTestCaseBase.getTestDataPathBase()
 
     @TestMetadata("lalal")
     fun testTTT() {
-        val path = File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/request.txt").readText()
+        try {
+            File(cachedTypeIds).writeText("{ \"freeid\" : 0, \"ids\": {} }")
 
-        val file = File(path)
-        val (sample, types) = extractPathsFrom(file.path, project)
+            val path = File(request).readText()
 
-        File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/answer.txt").writeText("PATH")
-        File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/paths.json").writeText(sample)
-        File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/types.json").writeText(types)
+            val file = File(path)
+            val (pathsJson, typesJson) = extractPathsFrom(file.path, project)
+
+            File(answer).writeText("PATH")
+            File(paths).writeText(pathsJson)
+            File(types).writeText(typesJson)
+        } catch (e: Throwable) {
+            File(answer).writeText("ERROR: ${e.stackTraceToString()} \n ${e.cause} \n ${e.message}")
+        }
 
         throw Exception("OK")
     }
@@ -533,18 +545,22 @@ class OnPredict : AbstractMultiModuleIdeResolveTest() {
 
     @TestMetadata("alalal")
     fun testTTT() {
-        val json = File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/request.txt").readText()
-        val (kind, type) = JsonParser.parseString(json).asJsonObject.let { it["kind"].asString to it["type"].asInt }
+        try {
+            val json = File(request).readText()
+            val (kind, type) = JsonParser.parseString(json).asJsonObject.let { it["kind"].asString to it["type"].asInt }
 
-        val answerFile = File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/answer.txt")
-        when (val result = workWithPrediction(kind, type, project)) {
-            is org.jetbrains.kotlin.diploma.cache.Paths -> {
-                answerFile.writeText("PATH")
-                File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/paths.json").writeText(result.integerDatasetJson)
-                File("/home/tihonovcore/diploma/kotlin/idea/tests/org/jetbrains/kotlin/diploma/out/types.json").writeText(result.typesInfoJson)
+            val answerFile = File(answer)
+            when (val result = workWithPrediction(kind, type, project)) {
+                is org.jetbrains.kotlin.diploma.cache.Paths -> {
+                    answerFile.writeText("PATH")
+                    File(paths).writeText(result.integerDatasetJson)
+                    File(types).writeText(result.typesInfoJson)
+                }
+                is Success -> answerFile.writeText("SUCC")
+                is Fail -> answerFile.writeText("FAIL")
             }
-            is Success -> answerFile.writeText("SUCC")
-            is Fail -> answerFile.writeText("FAIL")
+        } catch (e: Throwable) {
+            File(answer).writeText("ERROR: ${e.stackTraceToString()} \n ${e.cause} \n ${e.message}")
         }
 
         throw Exception("OK")

@@ -6,16 +6,20 @@
 package org.jetbrains.kotlin.diploma.analysis
 
 import com.google.gson.Gson
+import com.google.gson.JsonParser
 import org.jetbrains.kotlin.descriptors.ClassifierDescriptor
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.descriptors.PropertyDescriptor
+import org.jetbrains.kotlin.diploma.json
+import org.jetbrains.kotlin.idea.caches.resolve.cachedTypeIds
 import org.jetbrains.kotlin.idea.refactoring.fqName.fqName
 import org.jetbrains.kotlin.idea.search.usagesSearch.descriptor
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.containingClassOrObject
 import org.jetbrains.kotlin.resolve.scopes.getDescriptorsFiltered
 import org.jetbrains.kotlin.types.typeUtil.supertypes
+import java.io.File
 
 data class ExtractedTypes(
     val functionDescriptors: List<FunctionDescriptor>,
@@ -167,13 +171,20 @@ private fun removeLoops(class2spec: Map<ClassifierDescriptor, ClassSpec>) {
 }
 
 fun Pair<List<FunctionSpec>, Map<ClassifierDescriptor, ClassSpec>>.withIntSpecification(): Pair<List<JsonFunctionSpec>, Map<ClassifierDescriptor, JsonClassSpec>> {
-    val ids = mutableListOf<ClassSpec>()
+    val ids = mutableListOf<Pair<ClassSpec, Int>>()
+
+    val json = JsonParser.parseString(File(cachedTypeIds).readText())
+    var freeId = json.asJsonObject["freeid"].asInt
+    val cachedIds = json.asJsonObject["ids"].asJsonObject.entrySet().associate { it.key to it.value.asInt }
+
     second.forEach { (_, specification) ->
-        ids += specification
+        val text = specification.name + "#" + specification.superTypes.joinToString(separator = "#") { it.name }
+        val identifier = cachedIds[text] ?: freeId++
+        ids += Pair(specification, identifier)
     }
 
     fun id(specification: ClassSpec): Int {
-        return ids.indexOfFirst { it === specification }
+        return ids.indexOfFirst { it.first === specification }
     }
 
     val classes = mutableMapOf<ClassifierDescriptor, JsonClassSpec>()
@@ -201,6 +212,12 @@ fun Pair<List<FunctionSpec>, Map<ClassifierDescriptor, ClassSpec>>.withIntSpecif
             function.dependencies.map { id(it) }.toHashSet()
         )
     }
+
+    val newIds = cachedIds + second.values.associate { specification ->
+        specification.name + "#" + specification.superTypes.joinToString(separator = "#") { it.name } to id(specification)
+    }
+
+    File(cachedTypeIds).writeText("{ \"freeid\" : $freeId, \"ids\": ${newIds.json()} }")
 
     return Pair(functions, classes)
 }
