@@ -24,7 +24,7 @@ import java.io.File
 data class ExtractedTypes(
     val functionDescriptors: List<FunctionDescriptor>,
     val functionSpecifications: List<JsonFunctionSpec>,
-    val class2spec:Map<ClassifierDescriptor, JsonClassSpec>
+    val class2spec: Map<ClassifierDescriptor, JsonClassSpec>
 )
 
 fun extractTypes(file: KtFile): ExtractedTypes {
@@ -33,15 +33,17 @@ fun extractTypes(file: KtFile): ExtractedTypes {
 
     file.acceptChildren(object : KtVisitorVoid() {
         override fun visitKtElement(element: KtElement) {
-            when (element) {
-                is KtClass -> classes += element.descriptor as ClassifierDescriptor
-                is KtConstructor<*> -> element.descriptor as FunctionDescriptor
-                is KtFunction -> {
-                    if (element.containingClassOrObject == null) {
-                        functions += element.descriptor as FunctionDescriptor
+            try {
+                when (element) {
+                    is KtClass -> classes += element.descriptor as ClassifierDescriptor
+                    is KtConstructor<*> -> element.descriptor as FunctionDescriptor
+                    is KtFunction -> {
+                        if (element.containingClassOrObject == null) {
+                            functions += element.descriptor as FunctionDescriptor
+                        }
                     }
                 }
-            }
+            } catch (_: Throwable) { }
 
             element.acceptChildren(this, null)
         }

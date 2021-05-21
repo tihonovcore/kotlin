@@ -15,7 +15,7 @@ import org.jetbrains.kotlin.diploma.*
 import org.jetbrains.kotlin.diploma.analysis.ExtractedTypes
 import org.jetbrains.kotlin.diploma.analysis.convertToJson
 import org.jetbrains.kotlin.diploma.analysis.extractTypes
-import org.jetbrains.kotlin.idea.caches.resolve.checkFile
+import org.jetbrains.kotlin.idea.caches.resolve.checkFileSkipErrors
 import org.jetbrains.kotlin.idea.caches.resolve.getMapPsiToTypeId
 import org.jetbrains.kotlin.idea.core.util.toVirtualFile
 import org.jetbrains.kotlin.lexer.KtTokens
@@ -31,7 +31,7 @@ fun extractPathsFrom(path: String, project: Project): Pair<String, String> {
 
     val ktFile = PsiManager.getInstance(project).findFile(file.toVirtualFile()!!) as KtFile
     val typesFromFile = extractTypes(ktFile)
-    val (typedNodes, hasCompileErrors) = checkFile(ktFile)
+    val (typedNodes, hasCompileErrors) = checkFileSkipErrors(ktFile)
 
     val (stringSample, from) = createSampleForFit(ktFile, getMapPsiToTypeId(typesFromFile.class2spec, typedNodes), 5..25, 25)
     val integerSample = stringSample.toIntegerSample()
@@ -63,17 +63,16 @@ fun workWithPrediction(kind: String, type: Int, project: Project): KotlinRespons
         val appended = nodeForChildAddition.append(decodedChild)
         notFinished += appended
 
-        val (typedNodes, _) = checkFile(file)
+        val (typedNodes, _) = checkFileSkipErrors(file)
         val typesFromFile = extractTypes(file) //TODO: makes empty `ExtractedTypes` on error
         val predictedType = typesFromFile.class2spec.entries.find { it.value.id == type }?.key
 
         if (appended is KtNameReferenceExpression) {
             val oldIdentifier = appended.node.children().find { it.elementType === KtTokens.IDENTIFIER }!!
             val newIdentifier = when (nodeForChildAddition) {
-                //TODO: choose based on predicted type?
-                is KtCallExpression -> typesFromFile.functionDescriptors.shuffled().first().name
-                is KtUserType -> typesFromFile.class2spec.values.shuffled().first().name
-                else -> findVisibleProperties(file, appended, typedNodes, predictedType).shuffled().first().name
+                is KtCallExpression -> typesFromFile.functionDescriptors.shuffled().firstOrNull()?.name ?: "no_found_call"
+                is KtUserType -> typesFromFile.class2spec.values.shuffled().firstOrNull()?.name ?: "no_found_type"
+                else -> findVisibleProperties(file, appended, typedNodes, predictedType).shuffled().firstOrNull()?.name ?: "no_found_var"
             }
 
             appended.node.replaceChild(oldIdentifier, LeafPsiElement(KtTokens.IDENTIFIER, newIdentifier.toString()))
@@ -86,7 +85,7 @@ fun workWithPrediction(kind: String, type: Int, project: Project): KotlinRespons
     } catch (_: Pipeline.AfterLastException) {
         notFinished.removeIf { it === nodeForChildAddition }
 
-        val (typedNodes, hasCompileErrors) = checkFile(file)
+        val (typedNodes, hasCompileErrors) = checkFileSkipErrors(file)
         val typesFromFile = extractTypes(file)
         if (hasCompileErrors) {
             if (attempts < MAX_ATTEMPTS) {
@@ -155,7 +154,7 @@ private fun findVisibleProperties(
     appended: PsiElement,
     typedNodes: List<TypedNode>,
     predictedType: ClassifierDescriptor?
-): List<PropertyDescriptor> {
+): List<VariableDescriptor> {
     var current = appended
     while (current !== file) {
         val typedChild = typedNodes.find { it.node === appended }
@@ -164,7 +163,7 @@ private fun findVisibleProperties(
             continue
         }
 
-        val allProperties = typedChild.context.map { it as PropertyDescriptor }
+        val allProperties = typedChild.context.map { it as VariableDescriptor }
         val propertiesWithSuitableType = allProperties.filter {
             val descriptor = it.type.constructor.declarationDescriptor
             descriptor != null && descriptor === predictedType
@@ -172,5 +171,5 @@ private fun findVisibleProperties(
         return propertiesWithSuitableType.ifEmpty { allProperties }
     }
 
-    throw Exception("no visible properties :(")
+    return emptyList()
 }

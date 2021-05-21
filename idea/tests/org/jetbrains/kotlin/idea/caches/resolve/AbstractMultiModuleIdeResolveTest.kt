@@ -584,13 +584,17 @@ fun getMapPsiToTypeId(
     }.associate { it }
 }
 
+fun checkFileSkipErrors(file: KtFile): Pair<MutableList<TypedNode>, Boolean> {
+    return try {
+        checkFile(file)
+    } catch (e: Throwable) {
+        Pair(mutableListOf(), true)
+    }
+}
+
 fun checkFile(file: KtFile): Pair<MutableList<TypedNode>, Boolean> {
     val resolutionFacade = file.getResolutionFacade()
-    val (bindingContext, moduleDescriptor) = try {
-        resolutionFacade.analyzeWithAllCompilerChecks(listOf(file))
-    } catch (e: Exception) {
-        return Pair(mutableListOf(), true)
-    }
+    val (bindingContext, moduleDescriptor) = resolutionFacade.analyzeWithAllCompilerChecks(listOf(file))
 
     val directives = KotlinTestUtils.parseDirectives(file.text)
     val diagnosticsFilter = BaseDiagnosticsTest.parseDiagnosticFilterDirective(directives, allowUnderscoreUsage = false)

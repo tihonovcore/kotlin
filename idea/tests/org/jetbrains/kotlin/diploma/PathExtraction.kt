@@ -93,7 +93,7 @@ fun createSampleForFit(
             ) to targetElement.original
         }
 
-    return samples.first { it.first.isNotTooBig() }
+    return samples.shuffled().first { it.first.isNotTooBig() }
 }
 
 fun createSampleForPredict(
